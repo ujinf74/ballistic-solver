@@ -1,80 +1,155 @@
 # Ballistic Launch Angle Solver
 
-Header-only C++17 solver that computes 3D launch angles for a projectile to intercept a moving target under gravity and air drag.
+A native solver that computes launch angles to intercept a moving target  
+under gravity and quadratic drag.
 
-The solver does **not** assume an analytic solution. Instead, it numerically simulates projectile motion and iteratively adjusts the launch direction until the projectile comes as close as possible to the target.
-
----
-
-## What this does
-
-Given:
-- Relative initial position of a target
-- Relative constant velocity of the target
-- Projectile launch speed
-- Gravity and drag parameters
-
-The solver finds:
-- Launch elevation angle (`theta`)
-- Launch azimuth angle (`phi`)
-- Time of closest approach
-- Miss distance at closest approach
-
-If an exact hit is not achievable, the solver returns the **best achievable solution** found within the given constraints.
+Unlike vacuum or closed-form solutions, this solver works in fully nonlinear
+conditions and converges even when trajectories are strongly curved.
 
 ---
 
-## Core idea
+## Demo (Unity)
 
-1. **Numerical trajectory simulation**  
-   Projectile motion is integrated forward in time using RK4, including gravity and velocity-dependent drag.
+Highly curved trajectories under strong air drag, still converging to a hit
+against moving targets.
 
-2. **Closest-approach detection**  
-   During simulation, the solver detects when the distance between projectile and target reaches a minimum.  
-   This minimum is refined using a local 1D optimization step.
+![Assets_Recordings_ballistic_demo (1)](https://github.com/user-attachments/assets/d88c2f91-09c6-48be-a950-461bfef18ed4)
 
-3. **Angular residual formulation**  
-   The miss vector at closest approach is converted into an angular correction problem by comparing two idealized reference launch directions:
-   - One aiming directly at the target
-   - One aiming at a corrected point offset by the miss vector
-
-   The difference between these directions defines a 2D angular residual.
-
-4. **Iterative angle correction**  
-   Launch angles are updated using a damped least-squares method (Levenberg–Marquardt) with:
-   - Line search for robustness
-   - Broyden updates to reduce expensive Jacobian evaluations
-
-This process repeats until the miss distance is below tolerance or iteration limits are reached.
+Full video is available in the repository or GitHub Releases.
 
 ---
 
-## Design goals
+## What is this?
 
-- Robust convergence in the presence of drag
-- No reliance on closed-form ballistic equations
-- Fully parameterized behavior for experimentation
-- Safe failure: always returns the best-known solution
+**ballistic-solver** computes launch angles that cause a projectile to intercept
+a moving target.
 
----
+The solver does not assume an analytic solution. Instead, it numerically
+simulates projectile motion and iteratively adjusts the launch direction
+until the closest approach to the target is minimized.
 
-## Intended use cases
-
-- Physics-based games or simulations
-- Guidance and interception experiments
-- Numerical methods and control research
-- Educational demonstrations of nonlinear solvers
+It is intended for simulations, games, and systems where robustness matters
+more than closed-form elegance.
 
 ---
 
-## Limitations
+## How it works (high level)
 
-- Accuracy depends on time step and integration limits
-- Target motion is assumed linear
-- Multiple valid solutions may exist; the solver converges to one local solution
+1. Simulate projectile motion using RK4 integration with quadratic drag  
+2. Track the closest approach between projectile and target  
+3. Express the miss at closest approach as an angular residual  
+4. Solve the nonlinear system using a damped least-squares method  
+   (Levenberg–Marquardt with Broyden updates)  
+5. Return the best-found solution, even if perfect convergence is not achieved  
+
+Failure cases are explicitly detected and reported.
 
 ---
 
-## Usage
+## Key properties
 
-See `examples/basic.cpp` for a minimal working example.
+- Moving targets supported  
+- Strong air resistance supported  
+- No analytic assumptions  
+- Robust convergence behavior  
+- Explicit success / failure reporting  
+- Header-only C++ core  
+- Stable C ABI for multi-language use  
+
+---
+
+## Supported usage
+
+The core solver is written in C++, but exposed through a stable C ABI.
+This allows usage from many environments:
+
+- C / C++
+- Python (ctypes)
+- C# / .NET / Unity (P/Invoke)
+- Rust, Go, Node.js, Java (via FFI)
+
+Prebuilt binaries are provided via GitHub Releases.
+
+---
+
+## Using prebuilt binaries
+
+Download the archive for your platform from **Releases**.
+
+Each release contains:
+
+- Shared library  
+  - Windows: `ballistic_c.dll`  
+  - Linux: `libballistic_c.so`  
+  - macOS: `libballistic_c.dylib`
+- C ABI header: `ballistic_c_api.h`
+
+The C ABI exposes a single entry point:
+
+```c
+int32_t ballistic_solve(const BallisticInputs* in, BallisticOutputs* out);
+````
+
+---
+
+## Python usage
+
+A minimal Python wrapper using `ctypes` is provided.
+
+```python
+import ballistic_solver as bs
+
+result = bs.solve(
+    relPos0=(120, 30, 5),
+    relVel=(2, -1, 0),
+    v0=90,
+    kDrag=0.002,
+)
+
+print(result["theta"], result["phi"], result["miss"])
+```
+
+The native library is loaded automatically from the package.
+
+---
+
+## C# / Unity usage
+
+A C# P/Invoke example is available in:
+
+```
+examples/csharp/
+```
+
+On Windows, place `ballistic_c.dll` next to the executable
+(or ensure it is discoverable via PATH),
+then call `ballistic_solve` via `DllImport`.
+
+This works directly inside Unity.
+
+---
+
+## Build from source
+
+```bash
+cmake -S . -B build
+cmake --build build -j
+ctest --test-dir build
+```
+
+The shared library target is `ballistic_c`.
+
+---
+
+## ABI notes
+
+* Plain C layout across the ABI boundary
+* Fixed-size arrays only
+* No dynamic allocation across the boundary
+* The solver always returns the best-found result, even on partial failure
+
+---
+
+## License
+
+MIT License
