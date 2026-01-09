@@ -37,6 +37,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item -Force build\Release\ballistic_c.dll dist\
+          Copy-Item -Force include\ballistic\ballistic_c_api.h dist\
           if (Test-Path build\Release\ballistic_c.lib) { Copy-Item -Force build\Release\ballistic_c.lib dist\ }
           if (Test-Path build\Release\ballistic_c.pdb) { Copy-Item -Force build\Release\ballistic_c.pdb dist\ }
 
@@ -45,12 +46,33 @@ jobs:
         run: |
           mkdir -p dist
           cp -f build/libballistic_c.so dist/ || cp -f build/Release/libballistic_c.so dist/
+          cp -f include/ballistic/ballistic_c_api.h dist/
 
       - name: Package artifacts (macOS)
         if: runner.os == 'macOS'
         run: |
           mkdir -p dist
           cp -f build/libballistic_c.dylib dist/ || cp -f build/Release/libballistic_c.dylib dist/
+          cp -f include/ballistic/ballistic_c_api.h dist/
+
+      - name: Zip artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          Compress-Archive -Path dist\* -DestinationPath "ballistic_${tag}_windows.zip" -Force
+
+      - name: Zip artifacts (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          tag="${{ github.ref_name }}"
+          os="$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')"
+          zip -r "ballistic_${tag}_${os}.zip" dist
+
+        with:
+          files: |
+            dist/*
+            ballistic_*.zip
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
