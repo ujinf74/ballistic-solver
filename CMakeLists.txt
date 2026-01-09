@@ -21,6 +21,21 @@ endif()
 add_executable(ballistic_example examples/basic.cpp)
 target_link_libraries(ballistic_example PRIVATE ballistic)
 
+add_library(ballistic_c SHARED
+    src/ballistic_c_api.cpp
+)
+
+target_link_libraries(ballistic_c
+    PRIVATE
+        ballistic
+)
+
+if (MSVC)
+    target_compile_options(ballistic_c PRIVATE /W4 /utf-8)
+else()
+    target_compile_options(ballistic_c PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 include(CTest)
 if (BUILD_TESTING)
     add_executable(ballistic_smoke_test tests/smoke_test.cpp)
