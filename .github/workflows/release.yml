@@ -69,13 +69,9 @@ jobs:
           os="$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')"
           zip -r "ballistic_${tag}_${os}.zip" dist
 
-        with:
-          files: |
-            dist/*
-            ballistic_*.zip
-
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/*
+            ballistic_*.zip
