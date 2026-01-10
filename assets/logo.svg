@@ -9,6 +9,9 @@
    id="svg1"
    sodipodi:docname="logo.svg"
    inkscape:version="1.4.2 (f4327f4, 2025-05-13)"
+   inkscape:export-filename="logo.png"
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns="http://www.w3.org/2000/svg"
@@ -25,7 +28,7 @@
      inkscape:document-units="px"
      showgrid="true"
      inkscape:zoom="0.7007503"
-     inkscape:cx="25.686753"
+     inkscape:cx="24.973232"
      inkscape:cy="304.67343"
      inkscape:window-width="1920"
      inkscape:window-height="1009"
@@ -202,7 +205,7 @@
        inkscape:original-d="m 175.16922,-128.06245 -58.53231,0.001 8e-4,146.601496 -55.030724,5.32183 L 145.9046,169.86493 230.19944,23.861975 175.16872,18.541231 Z"
        sodipodi:nodetypes="cccccccc" />
     <circle
-       style="display:inline;fill:#ffaa00;fill-opacity:1;stroke:none;stroke-width:19.2;stroke-linejoin:round;stroke-dasharray:none;stroke-dashoffset:172.8;stroke-opacity:1;paint-order:stroke markers fill"
+       style="display:inline;fill:#f5a300;fill-opacity:1;stroke:none;stroke-width:19.2;stroke-linejoin:round;stroke-dasharray:none;stroke-dashoffset:172.8;stroke-opacity:1;paint-order:stroke markers fill"
        id="path32-2-2"
        cx="76.072617"
        cy="395.25885"
