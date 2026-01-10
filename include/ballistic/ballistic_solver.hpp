@@ -93,19 +93,19 @@ struct BallisticParams
     // ----------------------------
     // Physical constants
     // ----------------------------
-    double g = 9.80665;        // 중력가속도 (m/s^2)
+    double g = 9.80665;        // Gravity acceleration (m/s^2)
 
     // ----------------------------
     // Integration/search parameters
     // ----------------------------
-    double dt = 0.01;          // RK4 기본 스텝
-    double tMax = 20.0;        // 최대 시뮬레이션 시간
+    double dt = 0.01;          // RK4 basic step
+    double tMax = 20.0;        // Maximum simulation time
 
     // ----------------------------
     // Targeting/acceptance criteria
     // ----------------------------
-    double tolMiss = 1e-2;     // 성공 판정 미스거리
-    double beta = 1.0;         // 조준점 보정 계수
+    double tolMiss = 1e-2;     // Success tolerance (miss distance)
+    double beta = 1.0;         // Target offset correction factor
 
     // ----------------------------
     // Solver iteration control
