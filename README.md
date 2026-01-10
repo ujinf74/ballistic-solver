@@ -1,3 +1,8 @@
+<p align="center">
+  <img src="assets/logo_light.svg#gh-light-mode-only" alt="logo" width="200">
+  <img src="assets/logo.svg#gh-dark-mode-only" alt="logo" width="200">
+</p>
+
 # Ballistic Launch Angle Solver
 
 A native solver that computes launch angles to intercept a moving target  
@@ -13,7 +18,7 @@ conditions and converges even when trajectories are strongly curved.
 Highly curved trajectories under strong air drag, still converging to a hit
 against moving targets.
 
-![Assets_Recordings_ballistic_demo (1)](https://github.com/user-attachments/assets/d88c2f91-09c6-48be-a950-461bfef18ed4)
+![Assets_Recordings_ballistic_demo](https://github.com/user-attachments/assets/d88c2f91-09c6-48be-a950-461bfef18ed4)
 
 Full video is available in the repository or GitHub Releases.
 
