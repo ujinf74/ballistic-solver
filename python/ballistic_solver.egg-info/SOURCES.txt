@@ -1,7 +1,0 @@
-pyproject.toml
-ballistic_solver/__init__.py
-ballistic_solver.egg-info/PKG-INFO
-ballistic_solver.egg-info/SOURCES.txt
-ballistic_solver.egg-info/dependency_links.txt
-ballistic_solver.egg-info/top_level.txt
-ballistic_solver/_native/ballistic_c.dll

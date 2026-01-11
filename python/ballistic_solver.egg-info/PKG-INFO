@@ -1,5 +1,0 @@
-Metadata-Version: 2.4
-Name: ballistic-solver
-Version: 0.1.0
-Summary: C++ ballistic launch angle solver with a native DLL backend
-Requires-Python: >=3.8
