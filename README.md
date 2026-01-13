@@ -97,10 +97,10 @@ Each release contains:
 
 * Shared library
 
-  * Windows: `ballistic_c.dll`
-  * Linux: `libballistic_c.so`
-  * macOS: `libballistic_c.dylib`
-* C ABI header: `ballistic_c_api.h`
+  * Windows: `ballistic_solver.dll`
+  * Linux: `libballistic_solver.so`
+  * macOS: `libballistic_solver.dylib`
+* C ABI header: `ballistic_solver_c_api.h`
 
 ---
 
@@ -109,7 +109,7 @@ Each release contains:
 A C# P/Invoke example is available in:
 
 ```
-examples/csharp/
+examples/dotnet/
 ```
 
 On Windows, place `ballistic_solver.dll` next to the executable
