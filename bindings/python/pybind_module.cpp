@@ -1,4 +1,5 @@
 #include <cctype>
+#include <stdexcept>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -67,6 +68,16 @@ PYBIND11_MODULE(_core, m)
 
         .def_readwrite("arcMode", &BallisticParams::arcMode)
         .def_readwrite("g", &BallisticParams::g)
+        .def_property(
+            "wind",
+            [](const BallisticParams& p) -> py::list
+            {
+                return vec3_to_list(p.wind);
+            },
+            [](BallisticParams& p, const py::sequence& wind)
+            {
+                p.wind = to_vec3(wind);
+            })
         .def_readwrite("dt", &BallisticParams::dt)
         .def_readwrite("tMax", &BallisticParams::tMax)
         .def_readwrite("tolMiss", &BallisticParams::tolMiss)
@@ -107,8 +118,11 @@ PYBIND11_MODULE(_core, m)
                 P = py::cast<BallisticParams>(paramsObj);
             }
 
-            const int am = normalize_arc_mode(arcMode);
-            P.arcMode = (am == 0) ? ArcMode::Low : ArcMode::High;
+            if (!arcMode.is_none())
+            {
+                const int am = normalize_arc_mode(arcMode);
+                P.arcMode = (am == 0) ? ArcMode::Low : ArcMode::High;
+            }
 
             const Vec3 r0 = to_vec3(relPos0);
             const Vec3 rv = to_vec3(relVel);
@@ -136,6 +150,6 @@ PYBIND11_MODULE(_core, m)
         py::arg("relVel"),
         py::arg("v0"),
         py::arg("kDrag"),
-        py::arg("arcMode") = 0,
+        py::arg("arcMode") = py::none(),
         py::arg("params") = py::none());
 }

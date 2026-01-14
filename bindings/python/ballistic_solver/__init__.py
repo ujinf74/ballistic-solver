@@ -1,7 +1,6 @@
-from ._core import ArcMode, BallisticParams, solve
+from ._core import BallisticParams, solve
 
 __all__ = [
-    "ArcMode",
     "BallisticParams",
     "solve",
 ]
