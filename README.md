@@ -50,14 +50,15 @@ This project instead **simulates the projectile** and **solves the intercept num
 ## Key properties
 
 * Moving targets supported
-* Low / High arc selection (since v0.2)
 * Strong air resistance (quadratic drag) supported
-* **Wind vector supported** (since v0.3)
+* Low / High arc selection (since v0.2)
+* Wind vector supported (since v0.3)
 * Robust in strongly nonlinear regimes (no analytic assumptions)
 * Best-effort result returned even without perfect convergence
 * Explicit success / failure reporting (+ diagnostic message)
 * Stable C ABI for multi-language use
 * Header-only C++ core
+* Easy install via PyPI: `pip install ballistic-solver`
 
 ---
 
