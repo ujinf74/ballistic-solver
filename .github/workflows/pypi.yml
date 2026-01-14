@@ -28,11 +28,9 @@ jobs:
           python -m pip install -U build
 
       - name: Build
-        working-directory: ballistic_solver
-        run: |
-          python -m build
+        run: python -m build
 
-      - name: Publish to PyPI
+      - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: ballistic_solver/dist
+          packages-dir: dist
