@@ -21,6 +21,12 @@ target_include_directories(_core PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/../../src
 )
 
+set_target_properties(_core PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/ballistic_solver"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/ballistic_solver"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/ballistic_solver"
+)
+
 install(TARGETS _core
   LIBRARY DESTINATION ballistic_solver
   RUNTIME DESTINATION ballistic_solver
