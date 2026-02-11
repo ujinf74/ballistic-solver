@@ -15,7 +15,7 @@ pybind11_add_module(_core MODULE
     pybind_module.cpp
 )
 
-target_link_libraries(_core PRIVATE ballistic_solver)
+#target_link_libraries(_core PRIVATE ballistic_solver)
 
 target_include_directories(_core PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/../../src
