@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "v0.3.3"
+        description: "vX.Y.Z"
         required: true
         type: string
 
@@ -17,8 +17,6 @@ permissions:
 
 env:
   TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-  VER: ${{ (github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name) && (github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name).startsWith('v') && (github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name).substr(1) || (github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name) }}
-
 
 jobs:
   native:
@@ -38,6 +36,11 @@ jobs:
           fetch-depth: 0
           ref: refs/tags/${{ env.TAG }}
 
+      - name: Set VER (strip leading v)
+        shell: bash
+        run: |
+          echo "VER=${TAG#v}" >> "$GITHUB_ENV"
+
       - name: Configure (CMake Release)
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBS_VERSION="${{ env.VER }}"
 
@@ -56,7 +59,7 @@ jobs:
           cp -f include/ballistic_solver_c_api.h dist/
 
           if [[ "${RUNNER_OS}" == "Linux" ]]; then
-            libpath="$(find build -maxdepth 10 -type f -name "libballistic_solver.so" -print -quit)"
+            libpath="$(find build -maxdepth 10 -type f -name "libballistic_solver.so*" -print -quit)"
           else
             libpath="$(find build -maxdepth 10 -type f -name "libballistic_solver.dylib" -print -quit)"
           fi
