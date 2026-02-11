@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <math.h>
+#include <string.h>
+
 #include "ballistic_solver_c_api.h"
 
 #ifndef M_PI
