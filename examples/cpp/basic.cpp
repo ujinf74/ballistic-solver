@@ -18,12 +18,12 @@ int main()
 
     // Solver configuration
     BallisticParams P;
-    P.arcMode = ArcMode::Low;   // or ArcMode::High
-    P.g = 9.80665;        // gravity
-    P.wind = { 0.0, 0.0, 0.0 };
-    P.dt = 0.01;          // integration step
-    P.tMax = 20.0;        // max simulation time
-    P.tolMiss = 1e-2;     // success tolerance
+    //P.arcMode = ArcMode::Low;
+    //P.g = 9.80665;
+    //P.wind = { 0.0, 0.0, 0.0 };
+    //P.dt = 0.01;
+    //P.tMax = 20.0;
+    //P.tolMiss = 1e-2;
 
     // Solve launch angles
     auto t0 = std::chrono::steady_clock::now();

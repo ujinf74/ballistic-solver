@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
-project(ballistic_solver_py LANGUAGES CXX)
+if(DEFINED SKBUILD_PROJECT_VERSION AND DEFINED SKBUILD_PROJECT_NAME)
+  project(${SKBUILD_PROJECT_NAME} VERSION ${SKBUILD_PROJECT_VERSION} LANGUAGES C CXX)
+else()
+  project(ballistic_solver_py LANGUAGES C CXX)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,6 +13,12 @@ find_package(pybind11 CONFIG REQUIRED)
 pybind11_add_module(_core MODULE
     pybind_module.cpp
 )
+
+if(DEFINED SKBUILD_PROJECT_VERSION)
+  target_compile_definitions(_core PRIVATE
+    BALLISTIC_SOLVER_VERSION_STRING="${SKBUILD_PROJECT_VERSION}"
+  )
+endif()
 
 target_include_directories(_core PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/../../src

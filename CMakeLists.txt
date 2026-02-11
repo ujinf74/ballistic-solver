@@ -1,9 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(ballistic_solver
-    VERSION 0.3.0
-    LANGUAGES C CXX
-)
+if(DEFINED BS_VERSION)
+  set(BS_VERSION_DETECTED "${BS_VERSION}")
+else()
+  bs_detect_version_from_git(BS_VERSION_DETECTED)
+endif()
+
+project(ballistic_solver VERSION "${BS_VERSION_DETECTED}" LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -97,12 +100,11 @@ set_target_properties(ballistic_solver PROPERTIES OUTPUT_NAME "ballistic_solver"
 
 if(DEFINED SKBUILD_PLATLIB_DIR)
   set(BS_NATIVE_DIR "${SKBUILD_PLATLIB_DIR}/ballistic_solver/_native")
-else()
-  set(BS_NATIVE_DIR "${CMAKE_INSTALL_LIBDIR}")
+
+  install(TARGETS ballistic_solver
+    RUNTIME DESTINATION "${BS_NATIVE_DIR}"  # Windows .dll
+    LIBRARY DESTINATION "${BS_NATIVE_DIR}"  # Linux .so / macOS .dylib
+    ARCHIVE DESTINATION "${BS_NATIVE_DIR}"  # .lib
+  )
 endif()
 
-install(TARGETS ballistic_solver
-  RUNTIME DESTINATION "${BS_NATIVE_DIR}"  # Windows .dll
-  LIBRARY DESTINATION "${BS_NATIVE_DIR}"  # Linux .so / macOS .dylib
-  ARCHIVE DESTINATION "${BS_NATIVE_DIR}"  # .lib
-)

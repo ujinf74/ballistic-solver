@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "v0.3.2"
+        description: "v0.3.3"
         required: true
         type: string
 
@@ -17,6 +17,8 @@ permissions:
 
 env:
   TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  VER: ${{ (github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name) && (github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name).startsWith('v') && (github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name).substr(1) || (github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name) }}
+
 
 jobs:
   native:
@@ -37,7 +39,7 @@ jobs:
           ref: refs/tags/${{ env.TAG }}
 
       - name: Configure (CMake Release)
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBS_VERSION="${{ env.VER }}"
 
       - name: Build
         run: cmake --build build --config Release --parallel

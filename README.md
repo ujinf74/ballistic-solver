@@ -1,4 +1,4 @@
-<img width="2024" height="512" alt="banner" src="https://github.com/user-attachments/assets/f4e57e3f-f584-4938-a321-e9dd83dbbac3" />
+<img width="2024" height="512" alt="banner" src="https://github.com/user-attachments/assets/f4e57e3f-f584-4938-a321-e9dd83dbbac3" /> 
 
 [![CI](https://github.com/ujinf74/ballistic-solver/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ujinf74/ballistic-solver/actions/workflows/ci.yml)
 [![Release Native + PyPI](https://github.com/ujinf74/ballistic-solver/actions/workflows/release.yml/badge.svg)](https://github.com/ujinf74/ballistic-solver/actions/workflows/release.yml)
@@ -41,7 +41,7 @@ print(result["success"], result["status"], result["message"])
 
 Highly curved trajectories under strong air drag, still converging to a hit against moving targets.
 
-https://github.com/user-attachments/assets/c0c69cdd-0dd4-4606-9c7d-f21dd002d7f7
+[https://github.com/user-attachments/assets/c0c69cdd-0dd4-4606-9c7d-f21dd002d7f7](https://github.com/user-attachments/assets/c0c69cdd-0dd4-4606-9c7d-f21dd002d7f7)
 
 ---
 
@@ -58,6 +58,7 @@ This project instead **simulates the projectile** and **solves the intercept num
 * Strong air resistance (quadratic drag) supported
 * Low / High arc selection (since v0.2)
 * Wind vector supported (since v0.3)
+* Extended C ABI utilities (since v0.4)
 * Robust in strongly nonlinear regimes (no analytic assumptions)
 * Best-effort result returned even without perfect convergence
 * Explicit success / failure reporting (+ diagnostic message)
@@ -93,31 +94,56 @@ Returned dict keys include:
 * `message` (short diagnostic string)
 * plus convergence diagnostics (`iterations`, `acceptedSteps`, `lastLambda`, `lastAlpha`)
 
-### Advanced tuning: `BallisticParams`
+---
 
-Example (wind + high arc):
+## Solver validity note
 
-```python
-import ballistic_solver as bs
+The solver internally integrates projectile motion using:
 
-p = bs.BallisticParams()
-p.g = 9.80665                # gravity
-p.wind = (3.0, 0.0, 0.0)     # wind vector
-p.dt = 0.01                  # RK4 step
-p.tMax = 20.0                # max sim time
-p.tolMiss = 1e-2             # hit tolerance
-p.maxIter = 20               # LM iterations
+* 4th-order Runge–Kutta (RK4)
+* Fixed timestep `dt`
+* Quadratic drag
+* Wind as air velocity
 
-result = bs.solve(
-    relPos0=(120, 30, 5),
-    relVel=(2, -1, 0),
-    v0=90,
-    kDrag=0.002,
-    arcMode="high",
-    params=p,
-)
-print(result["theta"], result["phi"], result["miss"])
+To match in-game ballistics, your runtime simulation must use the **same physical model and integrator configuration**.
+
+If your game uses a different integrator (e.g., Euler) or a different timestep, the computed launch angles may not hit even if the solver reports success.
+
+---
+
+## C ABI (stable interface)
+
+Primary intercept API:
+
+```c
+void ballistic_inputs_init(BallisticInputs* in);
+int32_t ballistic_solve(const BallisticInputs* in, BallisticOutputs* out);
 ```
+
+Since **v0.4.0**, additional utility functions are available:
+
+```c
+void ballistic_rk4_step(...);
+
+int32_t ballistic_simulate_trajectory(...);
+int32_t ballistic_simulate_trajectory_from_angles(...);
+
+int32_t ballistic_find_closest_approach(...);
+
+int32_t ballistic_vacuum_arc_angles_to_point(...);
+void ballistic_initial_guess_vacuum_lead(...);
+```
+
+See `ballistic_solver_c_api.h` for full signatures and parameter definitions.
+
+This enables usage from:
+
+* C / C++
+* Python (ctypes via the C ABI)
+* C# / .NET / Unity (P/Invoke)
+* Others via FFI
+
+Prebuilt native binaries are provided via GitHub Releases.
 
 ---
 
@@ -130,7 +156,7 @@ C ABI convention:
 
 High arc example:
 
-https://github.com/user-attachments/assets/4334ed87-597e-4ad4-b21e-c1a1a17e8cd8
+[https://github.com/user-attachments/assets/4334ed87-597e-4ad4-b21e-c1a1a17e8cd8](https://github.com/user-attachments/assets/4334ed87-597e-4ad4-b21e-c1a1a17e8cd8)
 
 ---
 
@@ -138,32 +164,12 @@ https://github.com/user-attachments/assets/4334ed87-597e-4ad4-b21e-c1a1a17e8cd8
 
 C ABI convention:
 
-- `wind[3]` = air velocity vector (same frame as `relPos0/relVel`)
-- Drag uses relative airspeed: `v_rel = v_projectile - wind`
+* `wind[3]` = air velocity vector (same frame as `relPos0/relVel`)
+* Drag uses relative airspeed: `v_rel = v_projectile - wind`
 
 Wind demo:
 
-https://github.com/user-attachments/assets/1cd998cf-34db-4a74-8817-c6393227ef4e
-
----
-
-## C ABI (stable interface)
-
-```c
-void ballistic_inputs_init(BallisticInputs* in);
-int32_t ballistic_solve(const BallisticInputs* in, BallisticOutputs* out);
-```
-
-See `ballistic_solver_c_api.h` for `BallisticInputs/Outputs` definitions and defaults.
-
-This enables usage from:
-
-* C / C++
-* Python (ctypes via the C ABI)
-* C# / .NET / Unity (P/Invoke)
-* Others via FFI
-
-Prebuilt native binaries are provided via GitHub Releases.
+[https://github.com/user-attachments/assets/1cd998cf-34db-4a74-8817-c6393227ef4e](https://github.com/user-attachments/assets/1cd998cf-34db-4a74-8817-c6393227ef4e)
 
 ---
 

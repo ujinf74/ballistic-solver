@@ -1,7 +1,7 @@
 #include <cctype>
 #include <stdexcept>
+#include <string>
 #include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
 
 #include "ballistic_solver_core.hpp"
 
@@ -121,7 +121,7 @@ PYBIND11_MODULE(_core, m)
             if (!arcMode.is_none())
             {
                 const int am = normalize_arc_mode(arcMode);
-                P.arcMode = (am == 0) ? ArcMode::Low : ArcMode::High;
+                P.arcMode = (am == 1) ? ArcMode::High : ArcMode::Low;
             }
 
             const Vec3 r0 = to_vec3(relPos0);
@@ -152,4 +152,161 @@ PYBIND11_MODULE(_core, m)
         py::arg("kDrag"),
         py::arg("arcMode") = py::none(),
         py::arg("params") = py::none());
+
+    m.def(
+        "rk4_step",
+        [](py::sequence r,
+           py::sequence v,
+           double h,
+           double kDrag,
+           py::object paramsObj) -> py::dict
+        {
+            BallisticParams P{};
+            if (!paramsObj.is_none()) P = py::cast<BallisticParams>(paramsObj);
+
+            State s{};
+            s.r = to_vec3(r);
+            s.v = to_vec3(v);
+
+            rk4_step(s, h, kDrag, P.g, P.wind);
+
+            py::dict out;
+            out["r"] = vec3_to_list(s.r);
+            out["v"] = vec3_to_list(s.v);
+            return out;
+        },
+        py::arg("r"),
+        py::arg("v"),
+        py::arg("h"),
+        py::arg("kDrag"),
+        py::arg("params") = py::none());
+
+    m.def(
+        "simulate",
+        [](py::sequence r0,
+           py::sequence v0,
+           double kDrag,
+           int steps,
+           py::object paramsObj) -> py::dict
+        {
+            if (steps < 0) throw std::runtime_error("steps must be >= 0.");
+
+            BallisticParams P{};
+            if (!paramsObj.is_none()) P = py::cast<BallisticParams>(paramsObj);
+
+            State s{};
+            s.r = to_vec3(r0);
+            s.v = to_vec3(v0);
+
+            py::list ts, rs, vs;
+            double t = 0.0;
+
+            ts.append(t);
+            rs.append(vec3_to_list(s.r));
+            vs.append(vec3_to_list(s.v));
+
+            for (int i = 0; i < steps; ++i)
+            {
+                rk4_step(s, P.dt, kDrag, P.g, P.wind);
+                t += P.dt;
+                ts.append(t);
+                rs.append(vec3_to_list(s.r));
+                vs.append(vec3_to_list(s.v));
+            }
+
+            py::dict out;
+            out["t"] = ts;
+            out["r"] = rs;
+            out["v"] = vs;
+            return out;
+        },
+        py::arg("r0"),
+        py::arg("v0"),
+        py::arg("kDrag"),
+        py::arg("steps"),
+        py::arg("params") = py::none());
+
+    m.def(
+        "closest_approach",
+        [](py::sequence relPos0,
+           py::sequence relVel,
+           double v0,
+           double kDrag,
+           double theta,
+           double phi,
+           py::object paramsObj) -> py::dict
+        {
+            BallisticParams P{};
+            if (!paramsObj.is_none()) P = py::cast<BallisticParams>(paramsObj);
+
+            const Vec3 dir = angles_to_dir(theta, phi);
+            const Vec3 projVel0 = v0 * dir;
+
+            Vec3 relMiss{};
+            double tStar = 0.0;
+
+            find_closest_approach(projVel0, to_vec3(relPos0), to_vec3(relVel), kDrag, P, relMiss, tStar);
+
+            py::dict out;
+            out["tStar"] = tStar;
+            out["miss"] = norm(relMiss);
+            out["relMissAtStar"] = vec3_to_list(relMiss);
+            return out;
+        },
+        py::arg("relPos0"),
+        py::arg("relVel"),
+        py::arg("v0"),
+        py::arg("kDrag"),
+        py::arg("theta"),
+        py::arg("phi"),
+        py::arg("params") = py::none());
+
+    m.def(
+        "vacuum_arc_angles_to_point",
+        [](py::sequence R,
+           double v0,
+           py::object arcMode,
+           double g) -> py::dict
+        {
+            const int am = normalize_arc_mode(arcMode);
+            const ArcMode mode = (am == 1) ? ArcMode::High : ArcMode::Low;
+
+            double theta = 0.0, phi = 0.0;
+            const bool ok = vacuum_arc_angles_to_point(to_vec3(R), v0, mode, g, theta, phi);
+
+            py::dict out;
+            out["reachable"] = ok;
+            out["theta"] = theta;
+            out["phi"] = phi;
+            return out;
+        },
+        py::arg("R"),
+        py::arg("v0"),
+        py::arg("arcMode") = py::str("low"),
+        py::arg("g") = 9.80665);
+
+    m.def(
+        "vacuum_lead_initial_guess",
+        [](py::sequence relPos0,
+           py::sequence relVel,
+           double v0,
+           py::object arcMode,
+           double g) -> py::dict
+        {
+            const int am = normalize_arc_mode(arcMode);
+            const ArcMode mode = (am == 1) ? ArcMode::High : ArcMode::Low;
+
+            double theta = 0.0, phi = 0.0;
+            initial_guess_vacuum_lead(to_vec3(relPos0), to_vec3(relVel), v0, mode, g, theta, phi);
+
+            py::dict out;
+            out["theta"] = theta;
+            out["phi"] = phi;
+            return out;
+        },
+        py::arg("relPos0"),
+        py::arg("relVel"),
+        py::arg("v0"),
+        py::arg("arcMode") = py::str("low"),
+        py::arg("g") = 9.80665);
 }
