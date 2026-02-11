@@ -1,4 +1,4 @@
-<img width="2024" height="512" alt="banner" src="https://github.com/user-attachments/assets/f4e57e3f-f584-4938-a321-e9dd83dbbac3" /> 
+<img width="2024" alt="banner" src="https://github.com/user-attachments/assets/f4e57e3f-f584-4938-a321-e9dd83dbbac3" />
 
 [![CI](https://github.com/ujinf74/ballistic-solver/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ujinf74/ballistic-solver/actions/workflows/ci.yml)
 [![Release Native + PyPI](https://github.com/ujinf74/ballistic-solver/actions/workflows/release.yml/badge.svg)](https://github.com/ujinf74/ballistic-solver/actions/workflows/release.yml)
@@ -41,7 +41,7 @@ print(result["success"], result["status"], result["message"])
 
 Highly curved trajectories under strong air drag, still converging to a hit against moving targets.
 
-[https://github.com/user-attachments/assets/c0c69cdd-0dd4-4606-9c7d-f21dd002d7f7](https://github.com/user-attachments/assets/c0c69cdd-0dd4-4606-9c7d-f21dd002d7f7)
+https://github.com/user-attachments/assets/c0c69cdd-0dd4-4606-9c7d-f21dd002d7f7
 
 ---
 
@@ -156,7 +156,7 @@ C ABI convention:
 
 High arc example:
 
-[https://github.com/user-attachments/assets/4334ed87-597e-4ad4-b21e-c1a1a17e8cd8](https://github.com/user-attachments/assets/4334ed87-597e-4ad4-b21e-c1a1a17e8cd8)
+https://github.com/user-attachments/assets/4334ed87-597e-4ad4-b21e-c1a1a17e8cd8
 
 ---
 
@@ -169,7 +169,7 @@ C ABI convention:
 
 Wind demo:
 
-[https://github.com/user-attachments/assets/1cd998cf-34db-4a74-8817-c6393227ef4e](https://github.com/user-attachments/assets/1cd998cf-34db-4a74-8817-c6393227ef4e)
+https://github.com/user-attachments/assets/1cd998cf-34db-4a74-8817-c6393227ef4e
 
 ---
 
