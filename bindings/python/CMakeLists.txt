@@ -7,18 +7,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(pybind11 CONFIG REQUIRED)
 
-set(BS_VERSION "${SKBUILD_PROJECT_VERSION}")
+#set(BS_VERSION "${SKBUILD_PROJECT_VERSION}")
 
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../.. ${CMAKE_BINARY_DIR}/bs_root)
+#add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../.. ${CMAKE_BINARY_DIR}/bs_root)
 
 pybind11_add_module(_core MODULE
-  pybind_module.cpp
+    pybind_module.cpp
 )
 
 target_link_libraries(_core PRIVATE ballistic_solver)
 
 target_include_directories(_core PRIVATE
-  ${CMAKE_CURRENT_LIST_DIR}/../../src
+    ${CMAKE_CURRENT_LIST_DIR}/../../src
 )
 
 set_target_properties(_core PROPERTIES
