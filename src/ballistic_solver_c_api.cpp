@@ -18,6 +18,59 @@ static inline bool finite3_arr(const double a[3])
     return finite3_ptr(a);
 }
 
+static inline ParamPreset preset_from_int(int32_t preset)
+{
+    if (preset == 0) { return ParamPreset::Fast; }
+    if (preset == 2) { return ParamPreset::Precise; }
+    return ParamPreset::Balanced;
+}
+
+static inline void apply_params_to_inputs(const BallisticParams& P, BallisticInputs* in)
+{
+    in->g = P.g;
+    in->wind[0] = P.wind.x;
+    in->wind[1] = P.wind.y;
+    in->wind[2] = P.wind.z;
+    in->dt = P.dt;
+    in->tMax = P.tMax;
+    in->tolMiss = P.tolMiss;
+    in->maxIter = static_cast<int32_t>(P.maxIter);
+}
+
+static inline BallisticParams params_from_inputs(const BallisticInputs* in)
+{
+    BallisticParams P;
+
+    P.arcMode = (in->arcMode == 1) ? ArcMode::High : ArcMode::Low;
+
+    if (std::isfinite(in->g) && in->g > 0.0) { P.g = in->g; }
+    if (std::isfinite(in->dt) && in->dt > 0.0) { P.dt = in->dt; }
+    if (std::isfinite(in->tMax) && in->tMax > 0.0) { P.tMax = in->tMax; }
+    if (std::isfinite(in->tolMiss) && in->tolMiss > 0.0) { P.tolMiss = in->tolMiss; }
+    if (in->maxIter > 0) { P.maxIter = static_cast<int>(in->maxIter); }
+
+    P.wind = { in->wind[0], in->wind[1], in->wind[2] };
+
+    return P;
+}
+
+static inline void fill_outputs(const SolverResult& r, BallisticOutputs* out)
+{
+    out->success = r.success ? 1 : 0;
+    out->status = static_cast<int32_t>(r.report.status);
+
+    out->theta = r.theta;
+    out->phi = r.phi;
+    out->miss = r.miss;
+    out->tStar = r.tStar;
+
+    out->relMissAtStar[0] = r.relMissAtStar.x;
+    out->relMissAtStar[1] = r.relMissAtStar.y;
+    out->relMissAtStar[2] = r.relMissAtStar.z;
+
+    std::snprintf(out->message, sizeof(out->message), "%s", r.report.message.c_str());
+}
+
 void ballistic_inputs_init(BallisticInputs* in)
 {
     if (in == nullptr)
@@ -25,12 +78,93 @@ void ballistic_inputs_init(BallisticInputs* in)
         return;
     }
 
+    std::memset(in, 0, sizeof(*in));
     in->arcMode = 0;
     in->g       = 9.80665;
     in->dt      = 0.01;
     in->tMax    = 20.0;
     in->tolMiss = 1e-2;
     in->maxIter = 20;
+}
+
+void ballistic_accel_inputs_init(BallisticAccelInputs* in)
+{
+    if (in == nullptr)
+    {
+        return;
+    }
+
+    std::memset(in, 0, sizeof(*in));
+    ballistic_inputs_init(&in->base);
+}
+
+int32_t ballistic_inputs_apply_preset(BallisticInputs* in, int32_t preset)
+{
+    if (in == nullptr)
+    {
+        return -1;
+    }
+
+    const int32_t arcMode = in->arcMode;
+    const double wind[3] = { in->wind[0], in->wind[1], in->wind[2] };
+    BallisticParams P = make_params_preset(preset_from_int(preset));
+
+    P.arcMode = (arcMode == 1) ? ArcMode::High : ArcMode::Low;
+    P.wind = { wind[0], wind[1], wind[2] };
+
+    apply_params_to_inputs(P, in);
+    in->arcMode = arcMode;
+    return 0;
+}
+
+int32_t ballistic_k_drag_from_physical(
+    double airDensity,
+    double dragCoefficient,
+    double area,
+    double mass,
+    double* out_kDrag)
+{
+    if (out_kDrag == nullptr)
+    {
+        return -1;
+    }
+
+    double kDrag = 0.0;
+    if (!k_drag_from_physical(airDensity, dragCoefficient, area, mass, kDrag))
+    {
+        *out_kDrag = kDrag;
+        return -2;
+    }
+
+    *out_kDrag = kDrag;
+    return 0;
+}
+
+int32_t ballistic_make_relative_motion(
+    const double targetPos3[3],
+    const double targetVel3[3],
+    const double platformPos3[3],
+    const double platformVel3[3],
+    double out_relPos3[3],
+    double out_relVel3[3])
+{
+    if (!targetPos3 || !targetVel3 || !platformPos3 || !platformVel3 || !out_relPos3 || !out_relVel3)
+    {
+        return -1;
+    }
+    if (!finite3_arr(targetPos3) || !finite3_arr(targetVel3) ||
+        !finite3_arr(platformPos3) || !finite3_arr(platformVel3))
+    {
+        return -2;
+    }
+
+    for (int i = 0; i < 3; ++i)
+    {
+        out_relPos3[i] = targetPos3[i] - platformPos3[i];
+        out_relVel3[i] = targetVel3[i] - platformVel3[i];
+    }
+
+    return 0;
 }
 
 int32_t ballistic_solve(const BallisticInputs* in, BallisticOutputs* out)
@@ -49,42 +183,14 @@ int32_t ballistic_solve(const BallisticInputs* in, BallisticOutputs* out)
 
     try
     {
-        BallisticParams P;
-
-        if (in->arcMode == 1)
-        {
-            P.arcMode = ArcMode::High;
-        }
-        else
-        {
-            P.arcMode = ArcMode::Low;
-        }
-
-        if (std::isfinite(in->g) && in->g > 0.0)       { P.g = in->g; }
-        if (std::isfinite(in->dt) && in->dt > 0.0)     { P.dt = in->dt; }
-        if (std::isfinite(in->tMax) && in->tMax > 0.0) { P.tMax = in->tMax; }
-        if (std::isfinite(in->tolMiss) && in->tolMiss > 0.0) { P.tolMiss = in->tolMiss; }
-        if (in->maxIter > 0) { P.maxIter = static_cast<int>(in->maxIter); }
+        BallisticParams P = params_from_inputs(in);
 
         const Vec3 relPos0 = { in->relPos0[0], in->relPos0[1], in->relPos0[2] };
         const Vec3 relVel  = { in->relVel[0],  in->relVel[1],  in->relVel[2]  };
-        P.wind = { in->wind[0], in->wind[1], in->wind[2] };
 
         const SolverResult r = solve_launch_angles(relPos0, relVel, in->v0, in->kDrag, P);
 
-        out->success = r.success ? 1 : 0;
-        out->status  = static_cast<int32_t>(r.report.status);
-
-        out->theta = r.theta;
-        out->phi   = r.phi;
-        out->miss  = r.miss;
-        out->tStar = r.tStar;
-
-        out->relMissAtStar[0] = r.relMissAtStar.x;
-        out->relMissAtStar[1] = r.relMissAtStar.y;
-        out->relMissAtStar[2] = r.relMissAtStar.z;
-
-        std::snprintf(out->message, sizeof(out->message), "%s", r.report.message.c_str());
+        fill_outputs(r, out);
 
         return 0;
     }
@@ -93,6 +199,44 @@ int32_t ballistic_solve(const BallisticInputs* in, BallisticOutputs* out)
         out->success = 0;
         out->status = static_cast<int32_t>(SolveStatus::InvalidInput);
         std::snprintf(out->message, sizeof(out->message), "Exception caught in ballistic_solve");
+        return -2;
+    }
+}
+
+int32_t ballistic_solve_accel(const BallisticAccelInputs* in, BallisticOutputs* out)
+{
+    if (in == nullptr || out == nullptr)
+    {
+        if (out != nullptr)
+        {
+            std::snprintf(out->message, sizeof(out->message), "Null pointer argument");
+        }
+        return -1;
+    }
+
+    std::memset(out, 0, sizeof(*out));
+    std::snprintf(out->message, sizeof(out->message), "Unknown");
+
+    try
+    {
+        const BallisticInputs* base = &in->base;
+        BallisticParams P = params_from_inputs(base);
+
+        const Vec3 relPos0 = { base->relPos0[0], base->relPos0[1], base->relPos0[2] };
+        const Vec3 relVel  = { base->relVel[0],  base->relVel[1],  base->relVel[2]  };
+        const Vec3 relAcc  = { in->relAcc[0], in->relAcc[1], in->relAcc[2] };
+
+        const SolverResult r = solve_launch_angles(relPos0, relVel, base->v0, base->kDrag, P, relAcc);
+
+        fill_outputs(r, out);
+
+        return 0;
+    }
+    catch (...)
+    {
+        out->success = 0;
+        out->status = static_cast<int32_t>(SolveStatus::InvalidInput);
+        std::snprintf(out->message, sizeof(out->message), "Exception caught in ballistic_solve_accel");
         return -2;
     }
 }

@@ -27,7 +27,7 @@ Unlike vacuum / closed-form solvers, this project **simulates the projectile** a
 
 ```bash
 pip install ballistic-solver
-````
+```
 
 Requires Python **>= 3.10**.
 
@@ -43,6 +43,20 @@ result = bs.solve(
 
 print(result["theta"], result["phi"], result["miss"])
 print(result["success"], result["status"], result["message"])
+```
+
+For tighter convergence without manually tuning every knob:
+
+```python
+params = bs.params_preset("precise")
+result = bs.solve((120, 30, 5), (2, -1, 0), 90, 0.002, params=params)
+```
+
+For repeated solves, Python also provides a thin convenience wrapper:
+
+```python
+solver = bs.Solver.preset("precise")
+result = solver.solve((120, 30, 5), (2, -1, 0), 90, 0.002)
 ```
 
 ---
@@ -65,10 +79,13 @@ This project instead **simulates the projectile** and **solves the intercept num
 ## Key properties
 
 * Moving targets supported
+* Constant-acceleration targets supported via the extended API
 * Strong air resistance (quadratic drag) supported
 * Low / High arc selection (since v0.2)
 * Wind vector supported (since v0.3)
 * Extended C ABI utilities (since v0.4)
+* Fast / balanced / precise solver presets
+* Physical drag helper: `kDrag = 0.5 * rho * Cd * area / mass`
 * Robust in strongly nonlinear regimes (no analytic assumptions)
 * Best-effort result returned even without perfect convergence
 * Explicit success / failure reporting (+ diagnostic message)
@@ -103,6 +120,31 @@ Returned dict keys include:
 * `status` (SolveStatus integer)
 * `message` (short diagnostic string)
 * plus convergence diagnostics (`iterations`, `acceptedSteps`, `lastLambda`, `lastAlpha`)
+
+### Utilities
+
+```python
+params = bs.params_preset("fast")  # or "balanced", "precise"
+kDrag = bs.k_drag_from_physical(
+    airDensity=1.225,
+    dragCoefficient=0.30,
+    area=0.00426,
+    mass=0.145,
+)
+```
+
+For constant-acceleration targets:
+
+```python
+result = bs.solve_accel(
+    relPos0=(120, 30, 5),
+    relVel=(2, -1, 0),
+    relAcc=(0, 0.2, 0),
+    v0=90,
+    kDrag=0.002,
+    params=bs.params_preset("precise"),
+)
+```
 
 ---
 
@@ -142,6 +184,16 @@ int32_t ballistic_find_closest_approach(...);
 
 int32_t ballistic_vacuum_arc_angles_to_point(...);
 void ballistic_initial_guess_vacuum_lead(...);
+```
+
+Additional extended APIs include:
+
+```c
+void ballistic_accel_inputs_init(BallisticAccelInputs* in);
+int32_t ballistic_solve_accel(const BallisticAccelInputs* in, BallisticOutputs* out);
+int32_t ballistic_inputs_apply_preset(BallisticInputs* in, int32_t preset);
+int32_t ballistic_k_drag_from_physical(...);
+int32_t ballistic_make_relative_motion(...);
 ```
 
 See `ballistic_solver_c_api.h` for full signatures and parameter definitions.
@@ -254,6 +306,23 @@ ctest --test-dir build
 ```
 
 The shared library target is `ballistic_solver`.
+
+## Regression and benchmark
+
+Python regression and local benchmark scripts are available:
+
+```bash
+python -c "import importlib.util; s=importlib.util.spec_from_file_location('rr','tests/random_regression.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); m.test_random_linear_cases(); m.test_acceleration_api_smoke()"
+python benchmarks/linear_cases.py
+```
+
+On a local Windows release build, 500 generated linear-target cases produced:
+
+```text
+fast:     median 0.107 ms, p95 0.233 ms, p95 miss 3.399e-02 m
+balanced: median 0.219 ms, p95 0.492 ms, p95 miss 7.287e-03 m
+precise:  median 0.265 ms, p95 0.583 ms, p95 miss 7.655e-06 m
+```
 
 ---
 

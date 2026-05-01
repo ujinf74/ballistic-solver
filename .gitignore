@@ -21,6 +21,7 @@ compile_commands.json
 *.dylib
 *.whl
 *.zip
+*.sln
 
 # Debug symbols / misc
 *.pdb
@@ -53,8 +54,13 @@ Thumbs.db
 __pycache__/
 *.py[cod]
 **/*.egg-info/
+bindings/python/ballistic_solver/_version.py
 .venv/
 venv/
+.bench_*/
+.test_site*/
+.pip_cache/
+.pip_tmp/
 
 # Assets
 assets/

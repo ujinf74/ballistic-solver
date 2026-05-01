@@ -90,6 +90,13 @@ enum class ArcMode
     High
 };
 
+enum class ParamPreset
+{
+    Fast = 0,
+    Balanced = 1,
+    Precise = 2
+};
+
 // ================================================================
 // // Parameters (configurable)
 // ================================================================
@@ -133,6 +140,64 @@ struct BallisticParams
     double gsTolAbs = 1e-8;
     double gsTolRel = 1e-8;
 };
+
+inline BallisticParams make_params_preset(ParamPreset preset)
+{
+    BallisticParams P{};
+
+    switch (preset)
+    {
+    case ParamPreset::Fast:
+        P.dt = 0.02;
+        P.tolMiss = 5e-2;
+        P.maxIter = 12;
+        P.lambdaTries = 4;
+        P.lineSearchTries = 8;
+        P.gsMaxIter = 12;
+        P.gsTolAbs = 1e-7;
+        P.gsTolRel = 1e-7;
+        break;
+
+    case ParamPreset::Precise:
+        P.dt = 0.01;
+        P.tolMiss = 1e-5;
+        P.maxIter = 80;
+        P.lambdaTries = 10;
+        P.lineSearchTries = 16;
+        P.gsMaxIter = 40;
+        P.gsTolAbs = 1e-10;
+        P.gsTolRel = 1e-10;
+        P.fdScale = 1e-5;
+        P.fdMin = 1e-7;
+        P.fdMax = 1e-4;
+        break;
+
+    case ParamPreset::Balanced:
+    default:
+        break;
+    }
+
+    return P;
+}
+
+inline bool k_drag_from_physical(
+    double airDensity,
+    double dragCoefficient,
+    double area,
+    double mass,
+    double& kDrag)
+{
+    if (!std::isfinite(airDensity) || !std::isfinite(dragCoefficient) ||
+        !std::isfinite(area) || !std::isfinite(mass) ||
+        airDensity < 0.0 || dragCoefficient < 0.0 || area < 0.0 || mass <= 0.0)
+    {
+        kDrag = std::numeric_limits<double>::quiet_NaN();
+        return false;
+    }
+
+    kDrag = 0.5 * airDensity * dragCoefficient * area / mass;
+    return std::isfinite(kDrag);
+}
 
 // ================================================================
 // Error reporting
@@ -233,9 +298,19 @@ inline Vec3 target_pos(const Vec3& relPos0, const Vec3& relVel, double t)
     return relPos0 + t * relVel;
 }
 
+inline Vec3 target_pos_acc(const Vec3& relPos0, const Vec3& relVel, const Vec3& relAcc, double t)
+{
+    return relPos0 + t * relVel + (0.5 * t * t) * relAcc;
+}
+
 inline Vec3 rel_vec(const Vec3& projPos, const Vec3& relPos0, const Vec3& relVel, double t)
 {
     return projPos - target_pos(relPos0, relVel, t);
+}
+
+inline Vec3 rel_vec_acc(const Vec3& projPos, const Vec3& relPos0, const Vec3& relVel, const Vec3& relAcc, double t)
+{
+    return projPos - target_pos_acc(relPos0, relVel, relAcc, t);
 }
 
 // ================================================================
@@ -292,10 +367,34 @@ inline double golden_section_min(EvalF&& f, double dt, int maxIter, double tolAb
 // ================================================================
 // Find closest approach (projectile starts at origin)
 // ================================================================
+inline void find_closest_approach_acc(
+    const Vec3& projVel0,
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    const Vec3& relAcc,
+    double kDrag,
+    const BallisticParams& P,
+    Vec3& relMissAtStar,
+    double& tStar);
+
 inline void find_closest_approach(
     const Vec3& projVel0,
     const Vec3& relPos0,
     const Vec3& relVel,
+    double kDrag,
+    const BallisticParams& P,
+    Vec3& relMissAtStar,
+    double& tStar)
+{
+    const Vec3 zeroAcc = { 0.0, 0.0, 0.0 };
+    find_closest_approach_acc(projVel0, relPos0, relVel, zeroAcc, kDrag, P, relMissAtStar, tStar);
+}
+
+inline void find_closest_approach_acc(
+    const Vec3& projVel0,
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    const Vec3& relAcc,
     double kDrag,
     const BallisticParams& P,
     Vec3& relMissAtStar,
@@ -307,7 +406,7 @@ inline void find_closest_approach(
 
     double tPrev = 0.0;
 
-    const Vec3 rel0 = rel_vec(prev.r, relPos0, relVel, 0.0);
+    const Vec3 rel0 = rel_vec_acc(prev.r, relPos0, relVel, relAcc, 0.0);
     const Vec3 relVel0 = prev.v - relVel;
     double qPrev = dot(rel0, relVel0);
 
@@ -319,9 +418,9 @@ inline void find_closest_approach(
         rk4_step(curr, P.dt, kDrag, P.g, P.wind);
         const double tCurr = tPrev + P.dt;
 
-        const Vec3 relCurr = rel_vec(curr.r, relPos0, relVel, tCurr);
+        const Vec3 relCurr = rel_vec_acc(curr.r, relPos0, relVel, relAcc, tCurr);
 
-        const Vec3 relVelCurr = curr.v - relVel;
+        const Vec3 relVelCurr = curr.v - (relVel + tCurr * relAcc);
         const double qCurr = dot(relCurr, relVelCurr);
 
         bool allowCheck = isLow || curr.v.z <= 0.0;
@@ -337,7 +436,7 @@ inline void find_closest_approach(
                 }
 
                 const double tOut = tPrev + tau;
-                const Vec3 rel = rel_vec(st.r, relPos0, relVel, tOut);
+                const Vec3 rel = rel_vec_acc(st.r, relPos0, relVel, relAcc, tOut);
                 return dot(rel, rel);
             };
 
@@ -350,7 +449,7 @@ inline void find_closest_approach(
                 rk4_step(stStar, tauStar, kDrag, P.g, P.wind);
             }
 
-            relMissAtStar = rel_vec(stStar.r, relPos0, relVel, tStar);
+            relMissAtStar = rel_vec_acc(stStar.r, relPos0, relVel, relAcc, tStar);
             return;
         }
 
@@ -361,7 +460,7 @@ inline void find_closest_approach(
     }
 
     tStar = tPrev;
-    relMissAtStar = rel_vec(prev.r, relPos0, relVel, tStar);
+    relMissAtStar = rel_vec_acc(prev.r, relPos0, relVel, relAcc, tStar);
 }
 
 // ================================================================
@@ -405,6 +504,16 @@ inline bool vacuum_arc_angles_to_point(const Vec3& R, double v0, ArcMode mode, d
 // ================================================================
 // Initial guess (vacuum lead)
 // ================================================================
+inline void initial_guess_vacuum_lead_acc(
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    const Vec3& relAcc,
+    double v0,
+    ArcMode mode,
+    double g,
+    double& theta0,
+    double& phi0);
+
 inline void initial_guess_vacuum_lead(
     const Vec3& relPos0,
     const Vec3& relVel,
@@ -414,8 +523,22 @@ inline void initial_guess_vacuum_lead(
     double& theta0,
     double& phi0)
 {
+    const Vec3 zeroAcc = { 0.0, 0.0, 0.0 };
+    initial_guess_vacuum_lead_acc(relPos0, relVel, zeroAcc, v0, mode, g, theta0, phi0);
+}
+
+inline void initial_guess_vacuum_lead_acc(
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    const Vec3& relAcc,
+    double v0,
+    ArcMode mode,
+    double g,
+    double& theta0,
+    double& phi0)
+{
     const double t0 = norm(relPos0) / std::max(v0, 1e-6);
-    const Vec3 R = relPos0 + t0 * relVel;
+    const Vec3 R = target_pos_acc(relPos0, relVel, relAcc, t0);
 
     const double Rxy = std::sqrt(R.x * R.x + R.y * R.y);
     phi0 = std::atan2(R.y, R.x);
@@ -451,6 +574,20 @@ inline void initial_guess_vacuum_lead(
 // ================================================================
 // Residual
 // ================================================================
+inline bool compute_angle_residual_acc(
+    double theta,
+    double phi,
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    const Vec3& relAcc,
+    double v0,
+    double kDrag,
+    const BallisticParams& P,
+    double F[2],
+    double& miss,
+    Vec3& relMissAtStar_out,
+    double& tStar_out);
+
 inline bool compute_angle_residual(
     double theta,
     double phi,
@@ -464,18 +601,36 @@ inline bool compute_angle_residual(
     Vec3& relMissAtStar_out,
     double& tStar_out)
 {
+    const Vec3 zeroAcc = { 0.0, 0.0, 0.0 };
+    return compute_angle_residual_acc(theta, phi, relPos0, relVel, zeroAcc, v0, kDrag, P, F, miss, relMissAtStar_out, tStar_out);
+}
+
+inline bool compute_angle_residual_acc(
+    double theta,
+    double phi,
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    const Vec3& relAcc,
+    double v0,
+    double kDrag,
+    const BallisticParams& P,
+    double F[2],
+    double& miss,
+    Vec3& relMissAtStar_out,
+    double& tStar_out)
+{
     const Vec3 dir = angles_to_dir(theta, phi);
     const Vec3 projVel0 = v0 * dir;
 
     Vec3 relMissAtStar;
     double tStar;
-    find_closest_approach(projVel0, relPos0, relVel, kDrag, P, relMissAtStar, tStar);
+    find_closest_approach_acc(projVel0, relPos0, relVel, relAcc, kDrag, P, relMissAtStar, tStar);
 
     miss = norm(relMissAtStar);
     relMissAtStar_out = relMissAtStar;
     tStar_out = tStar;
 
-    const Vec3 aim = target_pos(relPos0, relVel, tStar);
+    const Vec3 aim = target_pos_acc(relPos0, relVel, relAcc, tStar);
     const Vec3 aimCorr = aim - P.beta * relMissAtStar;
 
     double th0, ph0, th1, ph1;
@@ -610,6 +765,7 @@ inline bool evaluate_candidate(
     double phiTry,
     const Vec3& relPos0,
     const Vec3& relVel,
+    const Vec3& relAcc,
     double v0,
     double kDrag,
     const BallisticParams& P)
@@ -619,7 +775,7 @@ inline bool evaluate_candidate(
     Vec3 relTry;
     double tTry;
 
-    if (!compute_angle_residual(thetaTry, phiTry, relPos0, relVel, v0, kDrag, P, Fnew, mTry, relTry, tTry))
+    if (!compute_angle_residual_acc(thetaTry, phiTry, relPos0, relVel, relAcc, v0, kDrag, P, Fnew, mTry, relTry, tTry))
     {
         return false;
     }
@@ -648,6 +804,7 @@ inline StepResult line_search_best(
     double dphi,
     const Vec3& relPos0,
     const Vec3& relVel,
+    const Vec3& relAcc,
     double v0,
     double kDrag,
     const BallisticParams& P,
@@ -670,7 +827,7 @@ inline StepResult line_search_best(
         res.lastAlpha = alpha;
 
         CandidateState cand{};
-        if (evaluate_candidate(cand, thTry, phTry, relPos0, relVel, v0, kDrag, P))
+        if (evaluate_candidate(cand, thTry, phTry, relPos0, relVel, relAcc, v0, kDrag, P))
         {
             res.hadCandidate = true;
 
@@ -703,7 +860,7 @@ inline StepResult line_search_best(
     if (!res.accepted && res.hadCandidate && std::isfinite(res.best.miss) && (res.best.miss < miss))
     {
         CandidateState reeval{};
-        if (evaluate_candidate(reeval, res.best.theta, res.best.phi, relPos0, relVel, v0, kDrag, P))
+        if (evaluate_candidate(reeval, res.best.theta, res.best.phi, relPos0, relVel, relAcc, v0, kDrag, P))
         {
             res.best = reeval;
             res.accepted = true;
@@ -777,6 +934,7 @@ inline bool try_lambda_tried_step(
     double& lambda,
     const Vec3& relPos0,
     const Vec3& relVel,
+    const Vec3& relAcc,
     double v0,
     double kDrag,
     const BallisticParams& P,
@@ -799,7 +957,7 @@ inline bool try_lambda_tried_step(
     StepResult step = line_search_best(
         theta, phi, F, miss, relMissAtStar, tStar,
         dtheta, dphi,
-        relPos0, relVel, v0, kDrag, P,
+        relPos0, relVel, relAcc, v0, kDrag, P,
         report);
 
     if (!step.accepted)
@@ -823,7 +981,8 @@ inline SolverResult solve_launch_angles(
     const Vec3& relVel,
     double v0,
     double kDrag,
-    const BallisticParams& P = BallisticParams{})
+    const BallisticParams& P = BallisticParams{},
+    const Vec3& relAcc = Vec3{ 0.0, 0.0, 0.0 })
 {
     SolverResult out{};
 
@@ -860,11 +1019,11 @@ inline SolverResult solve_launch_angles(
 
         if (canMinus && canPlus)
         {
-            if (!compute_angle_residual(th + hth, ph, relPos0, relVel, v0, kDrag, P, Fp, mTmp, relTmp, tTmp))
+            if (!compute_angle_residual_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp))
             {
                 return false;
             }
-            if (!compute_angle_residual(th - hth, ph, relPos0, relVel, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
+            if (!compute_angle_residual_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
             {
                 return false;
             }
@@ -874,7 +1033,7 @@ inline SolverResult solve_launch_angles(
         }
         else if (canPlus)
         {
-            if (!compute_angle_residual(th + hth, ph, relPos0, relVel, v0, kDrag, P, Fp, mTmp, relTmp, tTmp))
+            if (!compute_angle_residual_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp))
             {
                 return false;
             }
@@ -884,7 +1043,7 @@ inline SolverResult solve_launch_angles(
         }
         else if (canMinus)
         {
-            if (!compute_angle_residual(th - hth, ph, relPos0, relVel, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
+            if (!compute_angle_residual_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
             {
                 return false;
             }
@@ -902,11 +1061,11 @@ inline SolverResult solve_launch_angles(
         const double php = wrap_pi(ph + hph);
         const double phm = wrap_pi(ph - hph);
 
-        if (!compute_angle_residual(th, php, relPos0, relVel, v0, kDrag, P, Fp, mTmp, relTmp, tTmp))
+        if (!compute_angle_residual_acc(th, php, relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp))
         {
             return false;
         }
-        if (!compute_angle_residual(th, phm, relPos0, relVel, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
+        if (!compute_angle_residual_acc(th, phm, relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
         {
             return false;
         }
@@ -922,7 +1081,7 @@ inline SolverResult solve_launch_angles(
     // Initial guess
     // ----------------------------
     double theta, phi;
-    initial_guess_vacuum_lead(relPos0, relVel, v0, P.arcMode, P.g, theta, phi);
+    initial_guess_vacuum_lead_acc(relPos0, relVel, relAcc, v0, P.arcMode, P.g, theta, phi);
     theta = std::clamp(theta, P.thetaMin, P.thetaMax);
     phi = wrap_pi(phi);
 
@@ -931,7 +1090,7 @@ inline SolverResult solve_launch_angles(
     Vec3 relMissAtStar{};
     double tStar = std::numeric_limits<double>::quiet_NaN();
 
-    if (!compute_angle_residual(theta, phi, relPos0, relVel, v0, kDrag, P, F, miss, relMissAtStar, tStar))
+    if (!compute_angle_residual_acc(theta, phi, relPos0, relVel, relAcc, v0, kDrag, P, F, miss, relMissAtStar, tStar))
     {
         out.theta = theta;
         out.phi = phi;
@@ -1003,7 +1162,7 @@ inline SolverResult solve_launch_angles(
             if (try_lambda_tried_step(
                     theta, phi, F, miss, relMissAtStar, tStar,
                     J, lambda,
-                    relPos0, relVel, v0, kDrag, P,
+                    relPos0, relVel, relAcc, v0, kDrag, P,
                     out.report))
             {
                 acceptedGlobal = true;

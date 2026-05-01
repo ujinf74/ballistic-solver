@@ -55,6 +55,46 @@ static int normalize_arc_mode(py::object arcMode)
     return py::cast<int>(arcMode);
 }
 
+static int normalize_preset(py::object preset)
+{
+    if (py::isinstance<py::str>(preset))
+    {
+        std::string s = py::cast<std::string>(preset);
+        for (char& c : s)
+        {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+
+        if (s == "fast" || s == "0") { return 0; }
+        if (s == "balanced" || s == "default" || s == "1") { return 1; }
+        if (s == "precise" || s == "precision" || s == "2") { return 2; }
+
+        throw std::runtime_error("Invalid preset. Use 'fast', 'balanced', or 'precise'.");
+    }
+
+    return py::cast<int>(preset);
+}
+
+static py::dict result_to_dict(const SolverResult& r)
+{
+    py::dict out;
+    out["success"] = r.success;
+    out["theta"] = r.theta;
+    out["phi"] = r.phi;
+    out["miss"] = r.miss;
+    out["tStar"] = r.tStar;
+    out["relMissAtStar"] = vec3_to_list(r.relMissAtStar);
+
+    out["status"] = static_cast<int>(r.report.status);
+    out["message"] = r.report.message;
+    out["iterations"] = r.report.iterations;
+    out["acceptedSteps"] = r.report.acceptedSteps;
+    out["lastLambda"] = r.report.lastLambda;
+    out["lastAlpha"] = r.report.lastAlpha;
+
+    return out;
+}
+
 PYBIND11_MODULE(_core, m)
 {
     m.doc() = "Ballistic solver (pybind11 core)";
@@ -103,9 +143,76 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("gsTolRel", &BallisticParams::gsTolRel);
 
     m.def(
+        "params_preset",
+        [](py::object preset) -> BallisticParams
+        {
+            const int p = normalize_preset(preset);
+            return make_params_preset(p == 0 ? ParamPreset::Fast : (p == 2 ? ParamPreset::Precise : ParamPreset::Balanced));
+        },
+        py::arg("preset") = py::str("balanced"));
+
+    m.def(
+        "k_drag_from_physical",
+        [](double airDensity, double dragCoefficient, double area, double mass) -> double
+        {
+            double kDrag = 0.0;
+            if (!k_drag_from_physical(airDensity, dragCoefficient, area, mass, kDrag))
+            {
+                throw std::runtime_error("Invalid physical drag inputs.");
+            }
+            return kDrag;
+        },
+        py::arg("airDensity"),
+        py::arg("dragCoefficient"),
+        py::arg("area"),
+        py::arg("mass"));
+
+    m.def(
         "solve",
         [](py::sequence relPos0,
            py::sequence relVel,
+           double v0,
+           double kDrag,
+           py::object arcMode,
+           py::object paramsObj,
+           py::object relAccObj) -> py::dict
+        {
+            BallisticParams P{};
+
+            if (!paramsObj.is_none())
+            {
+                P = py::cast<BallisticParams>(paramsObj);
+            }
+
+            if (!arcMode.is_none())
+            {
+                const int am = normalize_arc_mode(arcMode);
+                P.arcMode = (am == 1) ? ArcMode::High : ArcMode::Low;
+            }
+
+            const Vec3 r0 = to_vec3(relPos0);
+            const Vec3 rv = to_vec3(relVel);
+            Vec3 ra = { 0.0, 0.0, 0.0 };
+            if (!relAccObj.is_none())
+            {
+                ra = to_vec3(py::cast<py::sequence>(relAccObj));
+            }
+
+            return result_to_dict(solve_launch_angles(r0, rv, v0, kDrag, P, ra));
+        },
+        py::arg("relPos0"),
+        py::arg("relVel"),
+        py::arg("v0"),
+        py::arg("kDrag"),
+        py::arg("arcMode") = py::none(),
+        py::arg("params") = py::none(),
+        py::arg("relAcc") = py::none());
+
+    m.def(
+        "solve_accel",
+        [](py::sequence relPos0,
+           py::sequence relVel,
+           py::sequence relAcc,
            double v0,
            double kDrag,
            py::object arcMode,
@@ -124,30 +231,11 @@ PYBIND11_MODULE(_core, m)
                 P.arcMode = (am == 1) ? ArcMode::High : ArcMode::Low;
             }
 
-            const Vec3 r0 = to_vec3(relPos0);
-            const Vec3 rv = to_vec3(relVel);
-
-            SolverResult r = solve_launch_angles(r0, rv, v0, kDrag, P);
-
-            py::dict out;
-            out["success"] = r.success;
-            out["theta"] = r.theta;
-            out["phi"] = r.phi;
-            out["miss"] = r.miss;
-            out["tStar"] = r.tStar;
-            out["relMissAtStar"] = vec3_to_list(r.relMissAtStar);
-
-            out["status"] = static_cast<int>(r.report.status);
-            out["message"] = r.report.message;
-            out["iterations"] = r.report.iterations;
-            out["acceptedSteps"] = r.report.acceptedSteps;
-            out["lastLambda"] = r.report.lastLambda;
-            out["lastAlpha"] = r.report.lastAlpha;
-
-            return out;
+            return result_to_dict(solve_launch_angles(to_vec3(relPos0), to_vec3(relVel), v0, kDrag, P, to_vec3(relAcc)));
         },
         py::arg("relPos0"),
         py::arg("relVel"),
+        py::arg("relAcc"),
         py::arg("v0"),
         py::arg("kDrag"),
         py::arg("arcMode") = py::none(),
@@ -255,6 +343,43 @@ PYBIND11_MODULE(_core, m)
         },
         py::arg("relPos0"),
         py::arg("relVel"),
+        py::arg("v0"),
+        py::arg("kDrag"),
+        py::arg("theta"),
+        py::arg("phi"),
+        py::arg("params") = py::none());
+
+    m.def(
+        "closest_approach_accel",
+        [](py::sequence relPos0,
+           py::sequence relVel,
+           py::sequence relAcc,
+           double v0,
+           double kDrag,
+           double theta,
+           double phi,
+           py::object paramsObj) -> py::dict
+        {
+            BallisticParams P{};
+            if (!paramsObj.is_none()) P = py::cast<BallisticParams>(paramsObj);
+
+            const Vec3 dir = angles_to_dir(theta, phi);
+            const Vec3 projVel0 = v0 * dir;
+
+            Vec3 relMiss{};
+            double tStar = 0.0;
+
+            find_closest_approach_acc(projVel0, to_vec3(relPos0), to_vec3(relVel), to_vec3(relAcc), kDrag, P, relMiss, tStar);
+
+            py::dict out;
+            out["tStar"] = tStar;
+            out["miss"] = norm(relMiss);
+            out["relMissAtStar"] = vec3_to_list(relMiss);
+            return out;
+        },
+        py::arg("relPos0"),
+        py::arg("relVel"),
+        py::arg("relAcc"),
         py::arg("v0"),
         py::arg("kDrag"),
         py::arg("theta"),

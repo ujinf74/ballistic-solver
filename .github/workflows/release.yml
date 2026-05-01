@@ -124,7 +124,7 @@ jobs:
           CIBW_ARCHS_MACOS: "universal2"
           CIBW_BUILD_VERBOSITY: "3"
           CIBW_TEST_COMMAND: >-
-            python -c "import ballistic_solver; print('import_ok')"
+            python -c "import ballistic_solver as bs; bs.params_preset('precise'); bs.k_drag_from_physical(1.225, 0.3, 0.00426, 0.145); print('import_ok')"
 
       - uses: actions/upload-artifact@v4
         with:

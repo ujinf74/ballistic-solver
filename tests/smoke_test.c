@@ -57,5 +57,44 @@ int main(void)
         out.relMissAtStar[0], out.relMissAtStar[1], out.relMissAtStar[2]);
     printf("message=%s\n", out.message);
 
+    {
+        double k = 0.0;
+        assert(ballistic_k_drag_from_physical(1.225, 0.30, 0.00426, 0.145, &k) == 0);
+        assert(isfinite(k));
+        assert(k > 0.0);
+    }
+
+    {
+        BallisticInputs precise;
+        ballistic_inputs_init(&precise);
+        assert(ballistic_inputs_apply_preset(&precise, 2) == 0);
+        assert(precise.tolMiss < in.tolMiss);
+        assert(precise.maxIter > in.maxIter);
+    }
+
+    {
+        BallisticAccelInputs accIn;
+        BallisticOutputs accOut;
+        ballistic_accel_inputs_init(&accIn);
+        memset(&accOut, 0, sizeof(accOut));
+
+        accIn.base.relPos0[0] = 120.0;
+        accIn.base.relPos0[1] = 30.0;
+        accIn.base.relPos0[2] = 5.0;
+        accIn.base.relVel[0] = 2.0;
+        accIn.base.relVel[1] = -1.0;
+        accIn.base.relVel[2] = 0.0;
+        accIn.relAcc[0] = 0.0;
+        accIn.relAcc[1] = 0.2;
+        accIn.relAcc[2] = 0.0;
+        accIn.base.v0 = 90.0;
+        accIn.base.kDrag = 0.002;
+
+        assert(ballistic_solve_accel(&accIn, &accOut) == 0);
+        assert(isfinite(accOut.theta));
+        assert(isfinite(accOut.phi));
+        assert(isfinite(accOut.miss));
+    }
+
     return 0;
 }

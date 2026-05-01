@@ -47,6 +47,12 @@ typedef struct BallisticInputs
     int32_t _pad1;
 } BallisticInputs;
 
+typedef struct BallisticAccelInputs
+{
+    BallisticInputs base;
+    double relAcc[3];
+} BallisticAccelInputs;
+
 typedef struct BallisticOutputs
 {
     int32_t success;
@@ -64,7 +70,32 @@ typedef struct BallisticOutputs
 
 BALLISTIC_SOLVER_C_API void ballistic_inputs_init(BallisticInputs* in);
 
+BALLISTIC_SOLVER_C_API void ballistic_accel_inputs_init(BallisticAccelInputs* in);
+
+BALLISTIC_SOLVER_C_API int32_t BALLISTIC_SOLVER_CALL ballistic_inputs_apply_preset(
+    BallisticInputs* in,
+    int32_t preset /* 0=Fast, 1=Balanced, 2=Precise */);
+
+BALLISTIC_SOLVER_C_API int32_t BALLISTIC_SOLVER_CALL ballistic_k_drag_from_physical(
+    double airDensity,
+    double dragCoefficient,
+    double area,
+    double mass,
+    double* out_kDrag);
+
+BALLISTIC_SOLVER_C_API int32_t BALLISTIC_SOLVER_CALL ballistic_make_relative_motion(
+    const double targetPos3[3],
+    const double targetVel3[3],
+    const double platformPos3[3],
+    const double platformVel3[3],
+    double out_relPos3[3],
+    double out_relVel3[3]);
+
 BALLISTIC_SOLVER_C_API int32_t ballistic_solve(const BallisticInputs* in, BallisticOutputs* out);
+
+BALLISTIC_SOLVER_C_API int32_t BALLISTIC_SOLVER_CALL ballistic_solve_accel(
+    const BallisticAccelInputs* in,
+    BallisticOutputs* out);
 
 BALLISTIC_SOLVER_C_API void BALLISTIC_SOLVER_CALL ballistic_rk4_step(
     double r3[3],
