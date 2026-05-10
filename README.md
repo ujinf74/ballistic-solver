@@ -177,6 +177,8 @@ Return value policy:
 * `0`: API call completed and `out` was filled.
 * `<0`: API-level failure, such as null pointers or an internal exception.
 * Numerical solve success is reported separately by `out->success` and `out->status`.
+* ABI v3 adds convergence diagnostics to `BallisticOutputs`: `iterations`,
+  `acceptedSteps`, `lastLambda`, and `lastAlpha`.
 
 Callers should check both:
 
@@ -221,6 +223,7 @@ This enables usage from:
 * C / C++
 * Python (ctypes via the C ABI)
 * C# / .NET / Unity (P/Invoke)
+* Godot 4 (GDExtension example)
 * Others via FFI
 
 Prebuilt native binaries are provided via GitHub Releases.

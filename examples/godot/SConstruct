@@ -1,0 +1,26 @@
+import os
+
+godot_cpp = os.environ.get("GODOT_CPP", "godot-cpp")
+solver_build_dir = os.environ.get("BALLISTIC_SOLVER_BUILD_DIR", "#../../build/Release")
+env = SConscript(os.path.join(godot_cpp, "SConstruct"))
+
+env.Append(CPPPATH=[
+    "#src",
+    "#../../include",
+])
+
+env.Append(LIBPATH=[
+    solver_build_dir,
+])
+
+env.Append(LIBS=["ballistic_solver"])
+
+if env["platform"] == "windows":
+    target_path = "bin/ballistic_solver_gd{}{}".format(env["suffix"], env["SHLIBSUFFIX"])
+elif env["platform"] == "linux":
+    target_path = "bin/libballistic_solver_gd{}{}".format(env["suffix"], env["SHLIBSUFFIX"])
+else:
+    target_path = "bin/libballistic_solver_gd{}.framework/libballistic_solver_gd{}".format(env["suffix"], env["suffix"])
+
+library = env.SharedLibrary(target_path, ["src/ballistic_solver_gd.cpp"])
+Default(library)

@@ -35,7 +35,8 @@ int main(void)
         return 2;
     }
 
-    printf("elev=%.6f deg az=%.6f deg miss=%.6f t=%.6f\n",
-           out.theta * 180.0 / M_PI, out.phi * 180.0 / M_PI, out.miss, out.tStar);
+    printf("elev=%.6f deg az=%.6f deg miss=%.6f t=%.6f iterations=%d accepted=%d lambda=%.6g alpha=%.6g\n",
+           out.theta * 180.0 / M_PI, out.phi * 180.0 / M_PI, out.miss, out.tStar,
+           (int)out.iterations, (int)out.acceptedSteps, out.lastLambda, out.lastAlpha);
     return 0;
 }

@@ -62,5 +62,12 @@ venv/
 .pip_cache/
 .pip_tmp/
 
+# Godot example build outputs
+examples/godot/bin/
+examples/godot/src/*.obj
+examples/godot/.godot/
+examples/godot/.sconsign.dblite
+examples/godot/ballistic_solver.dll
+
 # Assets
 assets/

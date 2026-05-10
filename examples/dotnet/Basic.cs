@@ -26,6 +26,10 @@ class Program
         Console.WriteLine($"phi={output.Phi}");
         Console.WriteLine($"miss={output.Miss}");
         Console.WriteLine($"tStar={output.TStar}");
+        Console.WriteLine($"iterations={output.Iterations}");
+        Console.WriteLine($"acceptedSteps={output.AcceptedSteps}");
+        Console.WriteLine($"lastLambda={output.LastLambda}");
+        Console.WriteLine($"lastAlpha={output.LastAlpha}");
         Console.WriteLine($"relMiss=[{output.RelMissAtStar.X}, {output.RelMissAtStar.Y}, {output.RelMissAtStar.Z}]");
         Console.WriteLine($"message={output.Message}");
     }

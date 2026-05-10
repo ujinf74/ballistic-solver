@@ -28,6 +28,10 @@ public static class Ballistic
         public readonly int Status;
         public readonly double Theta, Phi, Miss, TStar;
         public readonly Vector3 RelMissAtStar;
+        public readonly int Iterations;
+        public readonly int AcceptedSteps;
+        public readonly double LastLambda;
+        public readonly double LastAlpha;
         public readonly string Message;
 
         internal Output(int rc, in NativeOutputs no, string msg)
@@ -40,6 +44,10 @@ public static class Ballistic
             Miss = no.miss;
             TStar = no.tStar;
             RelMissAtStar = new Vector3((float)no.relMissAtStar[0], (float)no.relMissAtStar[1], (float)no.relMissAtStar[2]);
+            Iterations = no.iterations;
+            AcceptedSteps = no.acceptedSteps;
+            LastLambda = no.lastLambda;
+            LastAlpha = no.lastAlpha;
             Message = msg;
         }
     }
@@ -320,6 +328,10 @@ public static class Ballistic
         public double miss;
         public double tStar;
         public fixed double relMissAtStar[3];
+        public int iterations;
+        public int acceptedSteps;
+        public double lastLambda;
+        public double lastAlpha;
         public fixed byte message[256];
     }
 

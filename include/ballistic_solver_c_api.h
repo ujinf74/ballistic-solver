@@ -19,7 +19,7 @@ extern "C" {
 #endif
 
 #ifndef BALLISTIC_SOLVER_ABI_VERSION
-    #define BALLISTIC_SOLVER_ABI_VERSION 2u
+    #define BALLISTIC_SOLVER_ABI_VERSION 3u
 #endif
 
 #ifndef BALLISTIC_SOLVER_VERSION_STRING
@@ -66,6 +66,11 @@ typedef struct BallisticOutputs
     double tStar;
 
     double relMissAtStar[3];
+
+    int32_t iterations;
+    int32_t acceptedSteps;
+    double lastLambda;
+    double lastAlpha;
 
     char message[256];
 } BallisticOutputs;

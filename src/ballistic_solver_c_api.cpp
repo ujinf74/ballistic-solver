@@ -68,6 +68,11 @@ static inline void fill_outputs(const SolverResult& r, BallisticOutputs* out)
     out->relMissAtStar[1] = r.relMissAtStar.y;
     out->relMissAtStar[2] = r.relMissAtStar.z;
 
+    out->iterations = static_cast<int32_t>(r.report.iterations);
+    out->acceptedSteps = static_cast<int32_t>(r.report.acceptedSteps);
+    out->lastLambda = r.report.lastLambda;
+    out->lastAlpha = r.report.lastAlpha;
+
     std::snprintf(out->message, sizeof(out->message), "%s", r.report.message.c_str());
 }
 

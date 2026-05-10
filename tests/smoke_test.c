@@ -45,6 +45,9 @@ int main(void)
     assert(isfinite(out.tStar));
     assert(is_finite3(out.relMissAtStar));
     assert(out.miss >= 0.0);
+    assert(out.iterations > 0);
+    assert(out.acceptedSteps >= 0);
+    assert(isfinite(out.lastLambda));
 
     printf("abi=%u\n", ballistic_solver_abi_version());
     printf("version=%s\n", ballistic_solver_version_string());
@@ -55,6 +58,10 @@ int main(void)
     printf("phi=%.17g rad\n", out.phi);
     printf("miss=%.17g m\n", out.miss);
     printf("t*=%.17g s\n", out.tStar);
+    printf("iterations=%d\n", out.iterations);
+    printf("acceptedSteps=%d\n", out.acceptedSteps);
+    printf("lastLambda=%.17g\n", out.lastLambda);
+    printf("lastAlpha=%.17g\n", out.lastAlpha);
     printf("relMissAtStar=[%.17g, %.17g, %.17g]\n",
         out.relMissAtStar[0], out.relMissAtStar[1], out.relMissAtStar[2]);
     printf("message=%s\n", out.message);
