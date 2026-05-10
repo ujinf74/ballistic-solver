@@ -223,7 +223,8 @@ This enables usage from:
 * C / C++
 * Python (ctypes via the C ABI)
 * C# / .NET / Unity (P/Invoke)
-* Godot 4 (GDExtension example)
+* Unity (UnityEngine.Vector3 wrapper example)
+* Godot 4 (GDExtension addon-style example)
 * Others via FFI
 
 Prebuilt native binaries are provided via GitHub Releases.

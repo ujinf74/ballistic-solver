@@ -5,7 +5,12 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\bindings\dotnet\BallisticSolver.cs" Link="BallisticSolver.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="..\..\build\$(Configuration)\ballistic_solver.dll">

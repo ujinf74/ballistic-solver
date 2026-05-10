@@ -64,10 +64,14 @@ venv/
 
 # Godot example build outputs
 examples/godot/bin/
+examples/godot/addons/ballistic_solver/bin/
 examples/godot/src/*.obj
+examples/godot/.build/*
 examples/godot/.godot/
 examples/godot/.sconsign.dblite
 examples/godot/ballistic_solver.dll
 
 # Assets
 assets/
+examples/unity/Assets/
+*.pdf

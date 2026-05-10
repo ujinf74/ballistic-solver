@@ -2,6 +2,9 @@
 
 #include <gdextension_interface.h>
 
+#include <cmath>
+#include <vector>
+
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
@@ -9,6 +12,24 @@
 #include "ballistic_solver_c_api.h"
 
 using namespace godot;
+
+namespace
+{
+void godot_to_solver(const Vector3& src, double dst[3])
+{
+    dst[0] = src.x;
+    dst[1] = src.z;
+    dst[2] = src.y;
+}
+
+Vector3 solver_to_godot(const double src[3])
+{
+    return Vector3(
+        static_cast<real_t>(src[0]),
+        static_cast<real_t>(src[2]),
+        static_cast<real_t>(src[1]));
+}
+}
 
 BallisticSolver::BallisticSolver() = default;
 
@@ -20,6 +41,9 @@ void BallisticSolver::_bind_methods()
         D_METHOD("solve", "rel_pos0", "rel_vel", "v0", "k_drag", "arc_mode"),
         &BallisticSolver::solve,
         DEFVAL(0));
+    ClassDB::bind_method(
+        D_METHOD("simulate_from_angles", "speed", "theta", "phi", "k_drag", "t_max", "dt"),
+        &BallisticSolver::simulate_from_angles);
 }
 
 Dictionary BallisticSolver::solve(
@@ -33,12 +57,8 @@ Dictionary BallisticSolver::solve(
     BallisticOutputs out{};
     ballistic_inputs_init(&in);
 
-    in.relPos0[0] = rel_pos0.x;
-    in.relPos0[1] = rel_pos0.y;
-    in.relPos0[2] = rel_pos0.z;
-    in.relVel[0] = rel_vel.x;
-    in.relVel[1] = rel_vel.y;
-    in.relVel[2] = rel_vel.z;
+    godot_to_solver(rel_pos0, in.relPos0);
+    godot_to_solver(rel_vel, in.relVel);
     in.v0 = v0;
     in.kDrag = k_drag;
     in.arcMode = arc_mode;
@@ -61,16 +81,64 @@ Dictionary BallisticSolver::solve(
     d["phi"] = out.phi;
     d["miss"] = out.miss;
     d["t_star"] = out.tStar;
-    d["rel_miss_at_star"] = Vector3(
-        static_cast<real_t>(out.relMissAtStar[0]),
-        static_cast<real_t>(out.relMissAtStar[1]),
-        static_cast<real_t>(out.relMissAtStar[2]));
+    d["rel_miss_at_star"] = solver_to_godot(out.relMissAtStar);
     d["iterations"] = out.iterations;
     d["accepted_steps"] = out.acceptedSteps;
     d["last_lambda"] = out.lastLambda;
     d["last_alpha"] = out.lastAlpha;
     d["message"] = String::utf8(out.message);
     return d;
+}
+
+PackedVector3Array BallisticSolver::simulate_from_angles(
+    double speed,
+    double theta,
+    double phi,
+    double k_drag,
+    double t_max,
+    double dt) const
+{
+    PackedVector3Array points;
+    if (speed <= 0.0 || t_max <= 0.0 || dt <= 0.0)
+    {
+        return points;
+    }
+
+    const int steps = static_cast<int>(std::ceil(t_max / dt));
+    std::vector<double> pos(static_cast<size_t>(steps + 1) * 3);
+    std::vector<double> vel(static_cast<size_t>(steps + 1) * 3);
+    std::vector<double> times(static_cast<size_t>(steps + 1));
+    const double r0[3] = {0.0, 0.0, 0.0};
+    const double wind[3] = {0.0, 0.0, 0.0};
+    int32_t out_count = 0;
+
+    const int rc = ballistic_simulate_trajectory_from_angles(
+        r0,
+        speed,
+        theta,
+        phi,
+        k_drag,
+        9.80665,
+        wind,
+        dt,
+        steps,
+        pos.data(),
+        vel.data(),
+        times.data(),
+        &out_count);
+
+    if (rc != 0)
+    {
+        return points;
+    }
+
+    points.resize(out_count);
+    for (int i = 0; i < out_count; ++i)
+    {
+        const int j = 3 * i;
+        points.set(i, solver_to_godot(&pos[j]));
+    }
+    return points;
 }
 
 void initialize_ballistic_solver_module(ModuleInitializationLevel level)

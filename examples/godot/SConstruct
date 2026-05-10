@@ -16,11 +16,15 @@ env.Append(LIBPATH=[
 env.Append(LIBS=["ballistic_solver"])
 
 if env["platform"] == "windows":
-    target_path = "bin/ballistic_solver_gd{}{}".format(env["suffix"], env["SHLIBSUFFIX"])
+    target_path = "addons/ballistic_solver/bin/ballistic_solver_gd{}{}".format(env["suffix"], env["SHLIBSUFFIX"])
 elif env["platform"] == "linux":
-    target_path = "bin/libballistic_solver_gd{}{}".format(env["suffix"], env["SHLIBSUFFIX"])
+    target_path = "addons/ballistic_solver/bin/libballistic_solver_gd{}{}".format(env["suffix"], env["SHLIBSUFFIX"])
 else:
-    target_path = "bin/libballistic_solver_gd{}.framework/libballistic_solver_gd{}".format(env["suffix"], env["suffix"])
+    target_path = "addons/ballistic_solver/bin/libballistic_solver_gd{}.framework/libballistic_solver_gd{}".format(env["suffix"], env["suffix"])
 
-library = env.SharedLibrary(target_path, ["src/ballistic_solver_gd.cpp"])
+object_path = ".build/ballistic_solver_gd"
+os.makedirs(".build", exist_ok=True)
+open(os.path.join(".build", ".gdignore"), "a").close()
+objects = [env.Object(object_path, "src/ballistic_solver_gd.cpp")]
+library = env.SharedLibrary(target_path, objects)
 Default(library)

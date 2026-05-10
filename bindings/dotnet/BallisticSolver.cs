@@ -34,7 +34,7 @@ public static class Ballistic
         public readonly double LastAlpha;
         public readonly string Message;
 
-        internal Output(int rc, in NativeOutputs no, string msg)
+        internal unsafe Output(int rc, in NativeOutputs no, string msg)
         {
             CallRc = rc;
             Success = no.success != 0;
@@ -84,7 +84,7 @@ public static class Ballistic
         }
     }
 
-    public static Input InputDefaults()
+    public static unsafe Input InputDefaults()
     {
         NativeInputs ni = default;
         Native.ballistic_inputs_init(ref ni);
@@ -117,7 +117,8 @@ public static class Ballistic
         string msg;
         unsafe
         {
-            fixed (byte* p = no.message) msg = CStr(p, 256);
+            byte* p = no.message;
+            msg = CStr(p, 256);
         }
 
         return new Output(rc, in no, msg);
@@ -319,7 +320,7 @@ public static class Ballistic
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private unsafe struct NativeOutputs
+    internal unsafe struct NativeOutputs
     {
         public int success;
         public int status;
