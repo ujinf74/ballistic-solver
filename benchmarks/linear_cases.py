@@ -1,38 +1,9 @@
-import argparse
-import importlib
 import math
-import os
 import random
 import statistics
-import sys
 import time
-from pathlib import Path
 
-
-ROOT = Path(__file__).resolve().parents[1]
-
-
-def import_ballistic_solver():
-    env_site = os.environ.get("BALLISTIC_BENCH_SITE")
-    candidates = [Path(env_site)] if env_site else []
-    candidates.extend([ROOT / ".bench_resume_site", ROOT / ".bench_site"])
-
-    for site in candidates:
-        if site.exists():
-            sys.path.insert(0, str(site))
-            try:
-                module = importlib.import_module("ballistic_solver")
-                if hasattr(module, "params_preset"):
-                    return module
-                sys.modules.pop("ballistic_solver", None)
-            finally:
-                if sys.path and sys.path[0] == str(site):
-                    sys.path.pop(0)
-
-    return importlib.import_module("ballistic_solver")
-
-
-bs = import_ballistic_solver()
+import ballistic_solver as bs
 
 
 def direction(theta, phi):
@@ -95,9 +66,5 @@ def run(preset, count):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--count", type=int, default=500)
-    args = parser.parse_args()
-
     for name in ("fast", "balanced", "precise"):
-        run(name, args.count)
+        run(name, 500)

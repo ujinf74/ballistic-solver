@@ -61,8 +61,6 @@ venv/
 .test_site*/
 .pip_cache/
 .pip_tmp/
-**/benchmark_report.md
 
 # Assets
 assets/
-*.pdf
