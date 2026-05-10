@@ -154,7 +154,7 @@ The solver internally integrates projectile motion using:
 
 * 4th-order Runge–Kutta (RK4)
 * Fixed timestep `dt`
-* Quadratic drag
+* Quadratic drag: `a = (0, 0, -g) - kDrag * |v - wind| * (v - wind)`
 * Wind as air velocity
 
 To match in-game ballistics, your runtime simulation must use the **same physical model and integrator configuration**.
@@ -170,6 +170,24 @@ Primary intercept API:
 ```c
 void ballistic_inputs_init(BallisticInputs* in);
 int32_t ballistic_solve(const BallisticInputs* in, BallisticOutputs* out);
+```
+
+Return value policy:
+
+* `0`: API call completed and `out` was filled.
+* `<0`: API-level failure, such as null pointers or an internal exception.
+* Numerical solve success is reported separately by `out->success` and `out->status`.
+
+Callers should check both:
+
+```c
+int32_t rc = ballistic_solve(&in, &out);
+if (rc != 0) {
+    /* API call failed */
+}
+if (!out.success) {
+    /* Solver ran but did not satisfy the requested tolerance. */
+}
 ```
 
 Since **v0.4.0**, additional utility functions are available:
@@ -279,6 +297,22 @@ Failure cases are explicitly detected and reported.
 
 ---
 
+## When solving can fail
+
+The solver returns a best-effort result even when it cannot satisfy `tolMiss`.
+Common causes include:
+
+* invalid inputs (`v0 <= 0`, non-positive `g`, `dt`, `tMax`, or `maxIter`)
+* geometrically unreachable vacuum targets
+* targets that require an intercept beyond `tMax`
+* strong drag or high-arc cases where the selected arc branch cannot be maintained
+* iteration limits that are too tight for the requested tolerance
+
+Use `success`, `status`, `message`, and `miss` together when deciding whether to
+accept a solution.
+
+---
+
 ## Status codes (SolveStatus)
 
 `BallisticOutputs.status` / Python `result["status"]` corresponds to:
@@ -309,14 +343,27 @@ The shared library target is `ballistic_solver`.
 
 ## Regression and benchmark
 
-Python regression and local benchmark scripts are available:
+Distributed regression and benchmark scripts are available:
 
 ```bash
-python -c "import importlib.util; s=importlib.util.spec_from_file_location('rr','tests/random_regression.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); m.test_random_linear_cases(); m.test_acceleration_api_smoke()"
+python tests/random_regression.py
 python benchmarks/linear_cases.py
 ```
 
-On a local Windows release build, 500 generated linear-target cases produced:
+The CI workflow runs CTest smoke coverage plus the Python regression script.
+The regression script includes analytic vacuum checks, constructed moving-target
+vacuum cases, unreachable-target checks, randomized linear cases, and
+constant-acceleration API smoke coverage.
+
+Experimental solver-variant benchmarks live under `tools/bench_variants/`.
+They are local development tools and are intentionally excluded from source distributions.
+
+Benchmark numbers depend on CPU, OS, compiler, build type, Python version, and
+whether native or Python entrypoints are measured. Record those fields when
+publishing comparisons.
+
+Reference result from a local Windows Release build, 500 generated linear-target
+cases:
 
 ```text
 fast:     median 0.107 ms, p95 0.233 ms, p95 miss 3.399e-02 m

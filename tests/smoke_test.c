@@ -35,6 +35,8 @@ int main(void)
     {
         int32_t rc = ballistic_solve(&in, &out);
         assert(rc == 0);
+        assert(out.success != 0);
+        assert(out.status == 0);
     }
 
     assert(isfinite(out.theta));
@@ -91,6 +93,7 @@ int main(void)
         accIn.base.kDrag = 0.002;
 
         assert(ballistic_solve_accel(&accIn, &accOut) == 0);
+        assert(accOut.success != 0);
         assert(isfinite(accOut.theta));
         assert(isfinite(accOut.phi));
         assert(isfinite(accOut.miss));

@@ -29,6 +29,11 @@ int main(void)
         printf("call failed: rc=%d status=%d message=%s\n", (int)rc, (int)out.status, out.message);
         return 1;
     }
+    if (!out.success)
+    {
+        printf("solve failed: status=%d miss=%.6f message=%s\n", (int)out.status, out.miss, out.message);
+        return 2;
+    }
 
     printf("elev=%.6f deg az=%.6f deg miss=%.6f t=%.6f\n",
            out.theta * 180.0 / M_PI, out.phi * 180.0 / M_PI, out.miss, out.tStar);

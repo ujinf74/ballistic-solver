@@ -27,3 +27,14 @@ jobs:
 
       - name: Test (ctest)
         run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python package
+        run: python -m pip install .
+
+      - name: Test Python regressions
+        run: python tests/random_regression.py

@@ -55,6 +55,8 @@ typedef struct BallisticAccelInputs
 
 typedef struct BallisticOutputs
 {
+    /* Nonzero only when the numerical solve satisfies the requested tolerance.
+       A successful API call can still report success=0; check status/message. */
     int32_t success;
     int32_t status;
 
@@ -91,6 +93,10 @@ BALLISTIC_SOLVER_C_API int32_t BALLISTIC_SOLVER_CALL ballistic_make_relative_mot
     double out_relPos3[3],
     double out_relVel3[3]);
 
+/* Return value policy:
+   0  = API call completed and out was filled.
+   <0 = API-level failure, such as invalid pointers or an internal exception.
+   Numerical solve success is reported by out->success and out->status. */
 BALLISTIC_SOLVER_C_API int32_t ballistic_solve(const BallisticInputs* in, BallisticOutputs* out);
 
 BALLISTIC_SOLVER_C_API int32_t BALLISTIC_SOLVER_CALL ballistic_solve_accel(

@@ -13,9 +13,15 @@ class Program
 
         var output = Ballistic.Solve(input);
 
-        Console.WriteLine($"call_ok={output.CallRc}");
+        Console.WriteLine($"call_rc={output.CallRc}");
         Console.WriteLine($"success={output.Success}");
         Console.WriteLine($"status={output.Status}");
+        if (output.CallRc != 0 || !output.Success)
+        {
+            Console.WriteLine($"solve failed: rc={output.CallRc} status={output.Status} message={output.Message}");
+            Environment.ExitCode = 1;
+            return;
+        }
         Console.WriteLine($"theta={output.Theta}");
         Console.WriteLine($"phi={output.Phi}");
         Console.WriteLine($"miss={output.Miss}");

@@ -2,20 +2,30 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Security fixes are provided for the latest released minor version.
+Older releases may receive fixes only when the impact is severe and the patch is
+low risk.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| 0.5.x   | :white_check_mark: |
+| < 0.5   | :x:                |
 
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
+Please report suspected vulnerabilities privately by email:
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+ujin@tukorea.ac.kr
+
+Include the affected version, platform, a minimal reproduction if available,
+and whether the issue affects the C ABI, Python package, build artifacts, or
+release process.
+
+Expected handling:
+
+* Acknowledgement target: within 7 days.
+* Initial triage target: within 14 days.
+* Accepted vulnerabilities are fixed on the supported release line and disclosed
+  after a patched release is available.
+* Reports that are not security issues may be redirected to normal GitHub
+  issues.
