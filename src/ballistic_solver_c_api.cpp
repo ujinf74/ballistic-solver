@@ -87,7 +87,7 @@ void ballistic_inputs_init(BallisticInputs* in)
     in->arcMode = 0;
     in->g       = 9.80665;
     in->dt      = 0.01;
-    in->tMax    = 20.0;
+    in->tMax    = 40.0;
     in->tolMiss = 1e-2;
     in->maxIter = 20;
 }

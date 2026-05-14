@@ -84,6 +84,7 @@ This project instead **simulates the projectile** and **solves the intercept num
 * Low / High arc selection (since v0.2)
 * Wind vector supported (since v0.3)
 * Extended C ABI utilities (since v0.4)
+* Quartic vacuum-lead initialization for moving targets (since v0.6)
 * Fast / balanced / precise solver presets
 * Physical drag helper: `kDrag = 0.5 * rho * Cd * area / mass`
 * Robust in strongly nonlinear regimes (no analytic assumptions)
@@ -370,10 +371,18 @@ Reference result from a local Windows Release build, 500 generated linear-target
 cases:
 
 ```text
-fast:     median 0.107 ms, p95 0.233 ms, p95 miss 3.399e-02 m
-balanced: median 0.219 ms, p95 0.492 ms, p95 miss 7.287e-03 m
-precise:  median 0.265 ms, p95 0.583 ms, p95 miss 7.655e-06 m
+fast:     median 0.094 ms, p95 0.228 ms, p95 miss 3.834e-02 m
+balanced: median 0.182 ms, p95 0.452 ms, p95 miss 5.351e-03 m
+precise:  median 0.199 ms, p95 0.569 ms, p95 miss 5.742e-06 m
 ```
+
+High-arc moving-target convergence update, local Windows Release build, 500
+generated cases:
+
+| Solver configuration | Success | Median runtime | P95 runtime | P95 miss |
+|---|---:|---:|---:|---:|
+| Previous core path | 382/500 (76.40%) | 4.301 ms | 27.124 ms | 3.227e+02 m |
+| v0.6.0 defaults | 490/500 (98.00%) | 1.845 ms | 2.535 ms | 8.809e-03 m |
 
 ---
 

@@ -108,22 +108,23 @@ struct BallisticParams
     Vec3 wind = { 0.0, 0.0, 0.0 };        // Wind vector
 
     double dt = 0.01;          // RK4 basic step
-    double tMax = 20.0;        // Maximum simulation time
+    double tMax = 40.0;        // Maximum simulation time
 
     double tolMiss = 1e-2;     // Success tolerance (miss distance)
-    double beta = 1.0;         // Target offset correction factor
+    double beta = 0.10;        // Target offset correction factor
 
     int maxIter = 20;
 
-    double lambdaInit = 1e-6;
+    double lambdaInit = 1e-4;
     double lambdaMin = 1e-12;
     double lambdaMax = 1e+6;
-    double lambdaUpMul = 10.0;
+    double lambdaUpMul = 5.0;
     double lambdaDownMul = 0.3;
     int lambdaTries = 6;
 
-    int lineSearchTries = 10;
-    double alphaMin = 1e-4;
+    int lineSearchTries = 6;
+    double lineSearchShrink = 0.3;
+    double alphaMin = 1e-3;
 
     double thetaMin = -M_PI / 2.0;
     double thetaMax =  M_PI / 2.0;
@@ -512,7 +513,8 @@ inline void initial_guess_vacuum_lead_acc(
     ArcMode mode,
     double g,
     double& theta0,
-    double& phi0);
+    double& phi0,
+    double tMax = 40.0);
 
 inline void initial_guess_vacuum_lead(
     const Vec3& relPos0,
@@ -527,6 +529,106 @@ inline void initial_guess_vacuum_lead(
     initial_guess_vacuum_lead_acc(relPos0, relVel, zeroAcc, v0, mode, g, theta0, phi0);
 }
 
+inline double vacuum_lead_linear_time_residual(
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    double v0,
+    double g,
+    double t)
+{
+    const Vec3 aim = relPos0 + t * relVel + Vec3{ 0.0, 0.0, 0.5 * g * t * t };
+    return dot(aim, aim) - v0 * v0 * t * t;
+}
+
+inline bool vacuum_lead_quartic_linear_target(
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    double v0,
+    ArcMode mode,
+    double g,
+    double tMax,
+    double& theta,
+    double& phi)
+{
+    if (!std::isfinite(v0) || v0 <= 0.0 || !std::isfinite(g) || g <= 0.0 ||
+        !std::isfinite(tMax) || tMax <= 1e-6)
+    {
+        return false;
+    }
+
+    constexpr int samples = 512;
+    const double tMin = 1e-6;
+    const double tHi = std::max(2.0 * tMin, tMax);
+
+    bool have = false;
+    double bestTheta = 0.0;
+    double bestPhi = 0.0;
+    double lastRoot = -1.0;
+
+    double tPrev = tMin;
+    double fPrev = vacuum_lead_linear_time_residual(relPos0, relVel, v0, g, tPrev);
+
+    for (int i = 1; i <= samples; ++i)
+    {
+        const double tCurr = tMin + (tHi - tMin) * static_cast<double>(i) / static_cast<double>(samples);
+        const double fCurr = vacuum_lead_linear_time_residual(relPos0, relVel, v0, g, tCurr);
+
+        if (std::isfinite(fPrev) && std::isfinite(fCurr) &&
+            ((fPrev <= 0.0 && fCurr >= 0.0) || (fPrev >= 0.0 && fCurr <= 0.0)))
+        {
+            double lo = tPrev;
+            double hi = tCurr;
+            double fLo = fPrev;
+
+            for (int it = 0; it < 64; ++it)
+            {
+                const double mid = 0.5 * (lo + hi);
+                const double fMid = vacuum_lead_linear_time_residual(relPos0, relVel, v0, g, mid);
+
+                if ((fLo <= 0.0 && fMid <= 0.0) || (fLo >= 0.0 && fMid >= 0.0))
+                {
+                    lo = mid;
+                    fLo = fMid;
+                }
+                else
+                {
+                    hi = mid;
+                }
+            }
+
+            const double root = 0.5 * (lo + hi);
+            if (lastRoot < 0.0 || std::fabs(root - lastRoot) > 1e-4)
+            {
+                const Vec3 aim = relPos0 + root * relVel + Vec3{ 0.0, 0.0, 0.5 * g * root * root };
+                double th;
+                double ph;
+                vec_to_angles(aim, th, ph);
+
+                if (std::isfinite(th) && std::isfinite(ph) &&
+                    (!have || (mode == ArcMode::High ? th > bestTheta : th < bestTheta)))
+                {
+                    have = true;
+                    bestTheta = th;
+                    bestPhi = ph;
+                }
+            }
+            lastRoot = root;
+        }
+
+        tPrev = tCurr;
+        fPrev = fCurr;
+    }
+
+    if (!have)
+    {
+        return false;
+    }
+
+    theta = bestTheta;
+    phi = bestPhi;
+    return true;
+}
+
 inline void initial_guess_vacuum_lead_acc(
     const Vec3& relPos0,
     const Vec3& relVel,
@@ -535,8 +637,15 @@ inline void initial_guess_vacuum_lead_acc(
     ArcMode mode,
     double g,
     double& theta0,
-    double& phi0)
+    double& phi0,
+    double tMax)
 {
+    if (norm(relAcc) <= 1e-12 &&
+        vacuum_lead_quartic_linear_target(relPos0, relVel, v0, mode, g, tMax, theta0, phi0))
+    {
+        return;
+    }
+
     const double t0 = norm(relPos0) / std::max(v0, 1e-6);
     const Vec3 R = target_pos_acc(relPos0, relVel, relAcc, t0);
 
@@ -850,7 +959,7 @@ inline StepResult line_search_best(
             report.lastPhi = phTry;
         }
 
-        alpha *= 0.5;
+        alpha *= P.lineSearchShrink;
         if (alpha < P.alphaMin)
         {
             break;
@@ -992,6 +1101,7 @@ inline SolverResult solve_launch_angles(
     if (!std::isfinite(v0) || v0 <= 0.0 || !std::isfinite(kDrag) ||
         !std::isfinite(P.g) || P.g <= 0.0 || !std::isfinite(P.dt) || P.dt <= 0.0 ||
         !std::isfinite(P.tMax) || P.tMax <= 0.0 || P.maxIter <= 0 ||
+        !std::isfinite(P.lineSearchShrink) || P.lineSearchShrink <= 0.0 || P.lineSearchShrink >= 1.0 ||
         P.thetaMin >= P.thetaMax)
     {
         out.report.status = SolveStatus::InvalidInput;
@@ -1081,7 +1191,7 @@ inline SolverResult solve_launch_angles(
     // Initial guess
     // ----------------------------
     double theta, phi;
-    initial_guess_vacuum_lead_acc(relPos0, relVel, relAcc, v0, P.arcMode, P.g, theta, phi);
+    initial_guess_vacuum_lead_acc(relPos0, relVel, relAcc, v0, P.arcMode, P.g, theta, phi, P.tMax);
     theta = std::clamp(theta, P.thetaMin, P.thetaMax);
     phi = wrap_pi(phi);
 
