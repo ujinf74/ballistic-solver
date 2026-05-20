@@ -85,6 +85,7 @@ This project instead **simulates the projectile** and **solves the intercept num
 * Wind vector supported (since v0.3)
 * Extended C ABI utilities (since v0.4)
 * Quartic vacuum-lead initialization for moving targets (since v0.6)
+* High-arc moving-target convergence fallback (since v0.6.1)
 * Fast / balanced / precise solver presets
 * Physical drag helper: `kDrag = 0.5 * rho * Cd * area / mass`
 * Robust in strongly nonlinear regimes (no analytic assumptions)
@@ -291,12 +292,15 @@ This works directly inside Unity.
 
 ## How it works (high level)
 
-1. Simulate projectile motion using RK4 integration with drag (+ wind)
-2. Track the closest approach between projectile and target
-3. Express the miss at closest approach as an angular residual
-4. Solve the nonlinear system using damped least squares (Levenberg–Marquardt)
-5. Accelerate Jacobian updates with Broyden-style refinement
-6. Return the best solution found
+1. Build a vacuum-lead initial guess from the moving-target quartic.
+2. Simulate projectile motion using RK4 integration with drag (+ wind).
+3. Track the closest approach between projectile and target.
+4. Express the miss at closest approach as an angular residual.
+5. Apply a one-shot fixed-point correction before the main iteration.
+6. Solve the nonlinear system using damped least squares (Levenberg–Marquardt).
+7. Accelerate Jacobian updates with Broyden-style refinement.
+8. If the auxiliary-residual path stalls, retry from direct-residual fallback seeds.
+9. Return the best solution found.
 
 Failure cases are explicitly detected and reported.
 
@@ -360,9 +364,6 @@ The regression script includes analytic vacuum checks, constructed moving-target
 vacuum cases, unreachable-target checks, randomized linear cases, and
 constant-acceleration API smoke coverage.
 
-Experimental solver-variant benchmarks live under `tools/bench_variants/`.
-They are local development tools and are intentionally excluded from source distributions.
-
 Benchmark numbers depend on CPU, OS, compiler, build type, Python version, and
 whether native or Python entrypoints are measured. Record those fields when
 publishing comparisons.
@@ -376,13 +377,14 @@ balanced: median 0.182 ms, p95 0.452 ms, p95 miss 5.351e-03 m
 precise:  median 0.199 ms, p95 0.569 ms, p95 miss 5.742e-06 m
 ```
 
-High-arc moving-target convergence update, local Windows Release build, 500
-generated cases:
+High-arc moving-target convergence update, local Windows Release build,
+generated linear-target cases:
 
-| Solver configuration | Success | Median runtime | P95 runtime | P95 miss |
-|---|---:|---:|---:|---:|
-| Previous core path | 382/500 (76.40%) | 4.301 ms | 27.124 ms | 3.227e+02 m |
-| v0.6.0 defaults | 490/500 (98.00%) | 1.845 ms | 2.535 ms | 8.809e-03 m |
+| Solver configuration | Success | Runtime summary | P95 miss |
+|---|---:|---:|---:|
+| Pre-v0.6 high-arc path | 469/500 (93.80%) | 4.006 ms/case | not recorded |
+| v0.6.0 defaults | 490/500 (98.00%) | median 1.845 ms, p95 2.535 ms | 8.809e-03 m |
+| v0.6.1 defaults | 5000/5000 (100.00%) | median 2.501 ms, p95 4.975 ms | 8.369e-03 m |
 
 ---
 

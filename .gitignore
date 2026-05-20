@@ -62,6 +62,7 @@ venv/
 .test_site*/
 .pip_cache/
 .pip_tmp/
+tools/bench_variants/
 
 # Godot example build outputs
 examples/godot/bin/
