@@ -2,6 +2,8 @@
 
 #include <cmath>
 #include <algorithm>
+#include <array>
+#include <complex>
 #include <limits>
 #include <string>
 
@@ -111,20 +113,21 @@ struct BallisticParams
     double tMax = 40.0;        // Maximum simulation time
 
     double tolMiss = 1e-2;     // Success tolerance (miss distance)
-    double beta = 0.10;        // Target offset correction factor
+    double beta = 0.04;        // Residual target offset correction factor
+    double preStepBeta = 1.0; // One-shot pre-LM correction factor
 
     int maxIter = 20;
 
-    double lambdaInit = 1e-4;
+    double lambdaInit = 1e-6;
     double lambdaMin = 1e-12;
     double lambdaMax = 1e+6;
-    double lambdaUpMul = 5.0;
+    double lambdaUpMul = 10.0;
     double lambdaDownMul = 0.3;
-    int lambdaTries = 6;
+    int lambdaTries = 2;
 
-    int lineSearchTries = 6;
-    double lineSearchShrink = 0.3;
-    double alphaMin = 1e-3;
+    int lineSearchTries = 1;
+    double lineSearchShrink = 0.5;
+    double alphaMin = 1e-4;
 
     double thetaMin = -M_PI / 2.0;
     double thetaMax =  M_PI / 2.0;
@@ -362,7 +365,16 @@ inline double golden_section_min(EvalF&& f, double dt, int maxIter, double tolAb
         }
     }
 
-    return std::clamp((f1 <= f2 ? x1 : x2), 0.0, dt);
+    double bestX = (f1 <= f2 ? x1 : x2);
+    double bestF = (f1 <= f2 ? f1 : f2);
+
+    const double f0 = f(0.0);
+    if (f0 < bestF) { bestX = 0.0; bestF = f0; }
+
+    const double fdt = f(dt);
+    if (fdt < bestF) { bestX = dt; }
+
+    return bestX;
 }
 
 // ================================================================
@@ -450,8 +462,11 @@ inline void find_closest_approach_acc(
                 rk4_step(stStar, tauStar, kDrag, P.g, P.wind);
             }
 
-            relMissAtStar = rel_vec_acc(stStar.r, relPos0, relVel, relAcc, tStar);
-            return;
+            if (isLow || stStar.v.z <= 0.0)
+            {
+                relMissAtStar = rel_vec_acc(stStar.r, relPos0, relVel, relAcc, tStar);
+                return;
+            }
         }
 
         prev = curr;
@@ -474,7 +489,7 @@ inline bool vacuum_arc_angles_to_point(const Vec3& R, double v0, ArcMode mode, d
 
     if (Rxy < 1e-12)
     {
-        theta = (R.z >= 0.0 ? 1.0 : -1.0) * (M_PI / 4.0);
+        theta = (R.z >= 0.0 ? 1.0 : -1.0) * (M_PI / 2.0);
         return true;
     }
 
@@ -540,6 +555,141 @@ inline double vacuum_lead_linear_time_residual(
     return dot(aim, aim) - v0 * v0 * t * t;
 }
 
+inline double eval_quartic(double a4, double a3, double a2, double a1, double a0, double x)
+{
+    return (((a4 * x + a3) * x + a2) * x + a1) * x + a0;
+}
+
+inline double eval_quartic_deriv(double a4, double a3, double a2, double a1, double x)
+{
+    return ((4.0 * a4 * x + 3.0 * a3) * x + 2.0 * a2) * x + a1;
+}
+
+inline double polish_quartic_root(double a4, double a3, double a2, double a1, double a0, double x)
+{
+    for (int i = 0; i < 8; ++i)
+    {
+        const double f = eval_quartic(a4, a3, a2, a1, a0, x);
+        const double df = eval_quartic_deriv(a4, a3, a2, a1, x);
+        if (!std::isfinite(f) || !std::isfinite(df) || std::fabs(df) < 1e-14)
+        {
+            break;
+        }
+        const double dx = f / df;
+        x -= dx;
+        if (!std::isfinite(x) || std::fabs(dx) <= 1e-12 * (1.0 + std::fabs(x)))
+        {
+            break;
+        }
+    }
+    return x;
+}
+
+inline bool add_quartic_real_root(double roots[4], int& count, double root)
+{
+    if (!std::isfinite(root))
+    {
+        return false;
+    }
+
+    for (int i = 0; i < count; ++i)
+    {
+        if (std::fabs(roots[i] - root) <= 1e-7 * (1.0 + std::max(std::fabs(roots[i]), std::fabs(root))))
+        {
+            return false;
+        }
+    }
+
+    if (count >= 4)
+    {
+        return false;
+    }
+
+    roots[count++] = root;
+    return true;
+}
+
+inline int solve_quartic_real_roots(
+    double a4,
+    double a3,
+    double a2,
+    double a1,
+    double a0,
+    double roots[4])
+{
+    if (!std::isfinite(a4) || !std::isfinite(a3) || !std::isfinite(a2) ||
+        !std::isfinite(a1) || !std::isfinite(a0) || std::fabs(a4) < 1e-30)
+    {
+        return 0;
+    }
+
+    using Complex = std::complex<double>;
+
+    const double A = a3 / a4;
+    const double B = a2 / a4;
+    const double C = a1 / a4;
+    const double D = a0 / a4;
+
+    const double p = B - 3.0 * A * A / 8.0;
+    const double q = A * A * A / 8.0 - A * B / 2.0 + C;
+    const double r = -3.0 * A * A * A * A / 256.0 + A * A * B / 16.0 - A * C / 4.0 + D;
+
+    std::array<Complex, 4> candidates{};
+    int candidateCount = 0;
+
+    if (std::fabs(q) <= 1e-14 * (1.0 + std::fabs(p) + std::fabs(r)))
+    {
+        const Complex disc = Complex(p * p - 4.0 * r, 0.0);
+        const Complex z0 = (-p + std::sqrt(disc)) * 0.5;
+        const Complex z1 = (-p - std::sqrt(disc)) * 0.5;
+        candidates[candidateCount++] = std::sqrt(z0) - A / 4.0;
+        candidates[candidateCount++] = -std::sqrt(z0) - A / 4.0;
+        candidates[candidateCount++] = std::sqrt(z1) - A / 4.0;
+        candidates[candidateCount++] = -std::sqrt(z1) - A / 4.0;
+    }
+    else
+    {
+        const Complex Pc = -p * p / 12.0 - r;
+        const Complex Qc = -p * p * p / 108.0 + p * r / 3.0 - q * q / 8.0;
+        const Complex sqrtArg = Qc * Qc / 4.0 + Pc * Pc * Pc / 27.0;
+        Complex U = std::pow(-Qc / 2.0 + std::sqrt(sqrtArg), 1.0 / 3.0);
+        if (std::abs(U) <= 1e-14)
+        {
+            U = std::pow(-Qc / 2.0 - std::sqrt(sqrtArg), 1.0 / 3.0);
+        }
+
+        if (std::abs(U) > 1e-14)
+        {
+            const Complex y = -5.0 * p / 6.0 + U - Pc / (3.0 * U);
+            const Complex W = std::sqrt(p + 2.0 * y);
+            if (std::abs(W) > 1e-14)
+            {
+                const Complex common = -3.0 * p - 2.0 * y;
+                const Complex term0 = std::sqrt(common - 2.0 * q / W);
+                const Complex term1 = std::sqrt(common + 2.0 * q / W);
+                candidates[candidateCount++] = 0.5 * ( W + term0) - A / 4.0;
+                candidates[candidateCount++] = 0.5 * ( W - term0) - A / 4.0;
+                candidates[candidateCount++] = 0.5 * (-W + term1) - A / 4.0;
+                candidates[candidateCount++] = 0.5 * (-W - term1) - A / 4.0;
+            }
+        }
+    }
+
+    int count = 0;
+    for (int i = 0; i < candidateCount; ++i)
+    {
+        const double real = candidates[i].real();
+        const double imag = candidates[i].imag();
+        if (std::fabs(imag) <= 1e-6 * (1.0 + std::fabs(real)))
+        {
+            const double polished = polish_quartic_root(a4, a3, a2, a1, a0, real);
+            add_quartic_real_root(roots, count, polished);
+        }
+    }
+
+    return count;
+}
+
 inline bool vacuum_lead_quartic_linear_target(
     const Vec3& relPos0,
     const Vec3& relVel,
@@ -556,67 +706,39 @@ inline bool vacuum_lead_quartic_linear_target(
         return false;
     }
 
-    constexpr int samples = 512;
-    const double tMin = 1e-6;
-    const double tHi = std::max(2.0 * tMin, tMax);
-
     bool have = false;
     double bestTheta = 0.0;
     double bestPhi = 0.0;
-    double lastRoot = -1.0;
 
-    double tPrev = tMin;
-    double fPrev = vacuum_lead_linear_time_residual(relPos0, relVel, v0, g, tPrev);
+    const Vec3 q = { 0.0, 0.0, 0.5 * g };
+    const double a4 = dot(q, q);
+    const double a3 = 2.0 * dot(relVel, q);
+    const double a2 = dot(relVel, relVel) + 2.0 * dot(relPos0, q) - v0 * v0;
+    const double a1 = 2.0 * dot(relPos0, relVel);
+    const double a0 = dot(relPos0, relPos0);
 
-    for (int i = 1; i <= samples; ++i)
+    double roots[4];
+    const int rootCount = solve_quartic_real_roots(a4, a3, a2, a1, a0, roots);
+    for (int i = 0; i < rootCount; ++i)
     {
-        const double tCurr = tMin + (tHi - tMin) * static_cast<double>(i) / static_cast<double>(samples);
-        const double fCurr = vacuum_lead_linear_time_residual(relPos0, relVel, v0, g, tCurr);
-
-        if (std::isfinite(fPrev) && std::isfinite(fCurr) &&
-            ((fPrev <= 0.0 && fCurr >= 0.0) || (fPrev >= 0.0 && fCurr <= 0.0)))
+        const double root = roots[i];
+        if (root <= 1e-8 || root > tMax * (1.0 + 1e-9))
         {
-            double lo = tPrev;
-            double hi = tCurr;
-            double fLo = fPrev;
-
-            for (int it = 0; it < 64; ++it)
-            {
-                const double mid = 0.5 * (lo + hi);
-                const double fMid = vacuum_lead_linear_time_residual(relPos0, relVel, v0, g, mid);
-
-                if ((fLo <= 0.0 && fMid <= 0.0) || (fLo >= 0.0 && fMid >= 0.0))
-                {
-                    lo = mid;
-                    fLo = fMid;
-                }
-                else
-                {
-                    hi = mid;
-                }
-            }
-
-            const double root = 0.5 * (lo + hi);
-            if (lastRoot < 0.0 || std::fabs(root - lastRoot) > 1e-4)
-            {
-                const Vec3 aim = relPos0 + root * relVel + Vec3{ 0.0, 0.0, 0.5 * g * root * root };
-                double th;
-                double ph;
-                vec_to_angles(aim, th, ph);
-
-                if (std::isfinite(th) && std::isfinite(ph) &&
-                    (!have || (mode == ArcMode::High ? th > bestTheta : th < bestTheta)))
-                {
-                    have = true;
-                    bestTheta = th;
-                    bestPhi = ph;
-                }
-            }
-            lastRoot = root;
+            continue;
         }
 
-        tPrev = tCurr;
-        fPrev = fCurr;
+        const Vec3 aim = relPos0 + root * relVel + Vec3{ 0.0, 0.0, 0.5 * g * root * root };
+        double th;
+        double ph;
+        vec_to_angles(aim, th, ph);
+
+        if (std::isfinite(th) && std::isfinite(ph) &&
+            (!have || (mode == ArcMode::High ? th > bestTheta : th < bestTheta)))
+        {
+            have = true;
+            bestTheta = th;
+            bestPhi = ph;
+        }
     }
 
     if (!have)
@@ -654,7 +776,7 @@ inline void initial_guess_vacuum_lead_acc(
 
     if (Rxy < 1e-9)
     {
-        theta0 = (R.z >= 0.0 ? 1.0 : -1.0) * (M_PI / 4.0);
+        theta0 = (R.z >= 0.0 ? 1.0 : -1.0) * (M_PI / 2.0);
         return;
     }
 
@@ -714,6 +836,33 @@ inline bool compute_angle_residual(
     return compute_angle_residual_acc(theta, phi, relPos0, relVel, zeroAcc, v0, kDrag, P, F, miss, relMissAtStar_out, tStar_out);
 }
 
+inline bool compute_aux_angle_delta(
+    const Vec3& aim,
+    const Vec3& relMissAtStar,
+    double beta,
+    double v0,
+    const BallisticParams& P,
+    double& dtheta,
+    double& dphi)
+{
+    const Vec3 aimCorr = aim - beta * relMissAtStar;
+
+    double th0, ph0, th1, ph1;
+    const bool ok0 = vacuum_arc_angles_to_point(aim, v0, P.arcMode, P.g, th0, ph0);
+    const bool ok1 = vacuum_arc_angles_to_point(aimCorr, v0, P.arcMode, P.g, th1, ph1);
+
+    if (!ok0 || !ok1)
+    {
+        vec_to_angles(aim, th0, ph0);
+        vec_to_angles(aimCorr, th1, ph1);
+    }
+
+    dtheta = th1 - th0;
+    dphi = wrap_pi(ph1 - ph0);
+
+    return std::isfinite(dtheta) && std::isfinite(dphi);
+}
+
 inline bool compute_angle_residual_acc(
     double theta,
     double phi,
@@ -740,22 +889,16 @@ inline bool compute_angle_residual_acc(
     tStar_out = tStar;
 
     const Vec3 aim = target_pos_acc(relPos0, relVel, relAcc, tStar);
-    const Vec3 aimCorr = aim - P.beta * relMissAtStar;
-
-    double th0, ph0, th1, ph1;
-    const bool ok0 = vacuum_arc_angles_to_point(aim, v0, P.arcMode, P.g, th0, ph0);
-    const bool ok1 = vacuum_arc_angles_to_point(aimCorr, v0, P.arcMode, P.g, th1, ph1);
-
-    if (!ok0 || !ok1)
+    double dtheta, dphi;
+    if (!compute_aux_angle_delta(aim, relMissAtStar, P.beta, v0, P, dtheta, dphi))
     {
-        vec_to_angles(aim, th0, ph0);
-        vec_to_angles(aimCorr, th1, ph1);
+        return false;
     }
 
-    F[0] = th1 - th0;
-    F[1] = wrap_pi(ph1 - ph0);
+    F[0] = dtheta;
+    F[1] = dphi;
 
-    return std::isfinite(F[0]) && std::isfinite(F[1]) && std::isfinite(miss);
+    return std::isfinite(miss);
 }
 
 // ================================================================
@@ -895,6 +1038,79 @@ inline bool evaluate_candidate(
     out.F[0] = Fnew[0];
     out.F[1] = Fnew[1];
 
+    out.miss = mTry;
+    out.relMissAtStar = relTry;
+    out.tStar = tTry;
+
+    return std::isfinite(out.miss) && std::isfinite(out.F[0]) && std::isfinite(out.F[1]);
+}
+
+inline bool compute_angle_residual_direct_acc(
+    double theta,
+    double phi,
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    const Vec3& relAcc,
+    double v0,
+    double kDrag,
+    const BallisticParams& P,
+    double F[2],
+    double& miss,
+    Vec3& relMissAtStar_out,
+    double& tStar_out)
+{
+    const Vec3 dir = angles_to_dir(theta, phi);
+    const Vec3 projVel0 = v0 * dir;
+
+    Vec3 relMissAtStar;
+    double tStar;
+    find_closest_approach_acc(projVel0, relPos0, relVel, relAcc, kDrag, P, relMissAtStar, tStar);
+
+    miss = norm(relMissAtStar);
+    relMissAtStar_out = relMissAtStar;
+    tStar_out = tStar;
+
+    const Vec3 aim = target_pos_acc(relPos0, relVel, relAcc, tStar);
+    const Vec3 aimCorr = aim - P.beta * relMissAtStar;
+
+    double th0;
+    double ph0;
+    double th1;
+    double ph1;
+    vec_to_angles(aim, th0, ph0);
+    vec_to_angles(aimCorr, th1, ph1);
+
+    F[0] = th1 - th0;
+    F[1] = wrap_pi(ph1 - ph0);
+
+    return std::isfinite(miss) && std::isfinite(F[0]) && std::isfinite(F[1]);
+}
+
+inline bool evaluate_candidate_direct(
+    CandidateState& out,
+    double thetaTry,
+    double phiTry,
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    const Vec3& relAcc,
+    double v0,
+    double kDrag,
+    const BallisticParams& P)
+{
+    double Fnew[2];
+    double mTry;
+    Vec3 relTry;
+    double tTry;
+
+    if (!compute_angle_residual_direct_acc(thetaTry, phiTry, relPos0, relVel, relAcc, v0, kDrag, P, Fnew, mTry, relTry, tTry))
+    {
+        return false;
+    }
+
+    out.theta = thetaTry;
+    out.phi = phiTry;
+    out.F[0] = Fnew[0];
+    out.F[1] = Fnew[1];
     out.miss = mTry;
     out.relMissAtStar = relTry;
     out.tStar = tTry;
@@ -1082,6 +1298,256 @@ inline bool try_lambda_tried_step(
         report);
 }
 
+inline bool solve_direct_fallback(
+    double& thetaBestAll,
+    double& phiBestAll,
+    double& missBestAll,
+    Vec3& relBestAll,
+    double& tBestAll,
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    const Vec3& relAcc,
+    double v0,
+    double kDrag,
+    const BallisticParams& P,
+    SolveReport& report)
+{
+    double theta = 0.0;
+    double phi = 0.0;
+    initial_guess_vacuum_lead_acc(relPos0, relVel, relAcc, v0, P.arcMode, P.g, theta, phi, P.tMax);
+    theta = std::clamp(theta, P.thetaMin, P.thetaMax);
+    phi = wrap_pi(phi);
+
+    std::array<CandidateState, 12> seeds{};
+    int seedCount = 0;
+
+    CandidateState cur{};
+    if (evaluate_candidate_direct(cur, theta, phi, relPos0, relVel, relAcc, v0, kDrag, P))
+    {
+        seeds[seedCount++] = cur;
+    }
+
+    for (int i = 0; i <= 10; ++i)
+    {
+        const double u = static_cast<double>(i) / 10.0;
+        const double tGuess = std::max(P.dt, P.tMax * (0.2 + 0.8 * u));
+        const Vec3 aim = target_pos_acc(relPos0, relVel, relAcc, tGuess) + Vec3{ 0.0, 0.0, 0.5 * P.g * tGuess * tGuess };
+        double thGuess;
+        double phGuess;
+        vec_to_angles(aim, thGuess, phGuess);
+        thGuess = std::clamp(thGuess, P.thetaMin, P.thetaMax);
+        phGuess = wrap_pi(phGuess);
+
+        CandidateState cand{};
+        if (evaluate_candidate_direct(cand, thGuess, phGuess, relPos0, relVel, relAcc, v0, kDrag, P))
+        {
+            seeds[seedCount++] = cand;
+        }
+    }
+
+    if (seedCount == 0)
+    {
+        return false;
+    }
+
+    std::sort(seeds.begin(), seeds.begin() + seedCount, [](const CandidateState& a, const CandidateState& b)
+    {
+        return a.miss < b.miss;
+    });
+
+    auto pick_fd_step = [&](double x) -> double
+    {
+        const double h = P.fdScale * (1.0 + std::fabs(x));
+        return std::clamp(h, P.fdMin, P.fdMax);
+    };
+
+    auto jacobian_direct_fd = [&](double th, double ph, const double Fbase[2], double Jout[2][2]) -> bool
+    {
+        double Fp[2], Fm[2];
+        double mTmp;
+        Vec3 relTmp;
+        double tTmp;
+
+        const double hth = pick_fd_step(th);
+        const bool canPlus = (th + hth <= P.thetaMax);
+        const bool canMinus = (th - hth >= P.thetaMin);
+
+        if (canMinus && canPlus)
+        {
+            if (!compute_angle_residual_direct_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp) ||
+                !compute_angle_residual_direct_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
+            {
+                return false;
+            }
+            Jout[0][0] = (Fp[0] - Fm[0]) / (2.0 * hth);
+            Jout[1][0] = wrap_pi(Fp[1] - Fm[1]) / (2.0 * hth);
+        }
+        else if (canPlus)
+        {
+            if (!compute_angle_residual_direct_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp))
+            {
+                return false;
+            }
+            Jout[0][0] = (Fp[0] - Fbase[0]) / hth;
+            Jout[1][0] = wrap_pi(Fp[1] - Fbase[1]) / hth;
+        }
+        else if (canMinus)
+        {
+            if (!compute_angle_residual_direct_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
+            {
+                return false;
+            }
+            Jout[0][0] = (Fbase[0] - Fm[0]) / hth;
+            Jout[1][0] = wrap_pi(Fbase[1] - Fm[1]) / hth;
+        }
+        else
+        {
+            return false;
+        }
+
+        const double hph = pick_fd_step(ph);
+        if (!compute_angle_residual_direct_acc(th, wrap_pi(ph + hph), relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp) ||
+            !compute_angle_residual_direct_acc(th, wrap_pi(ph - hph), relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
+        {
+            return false;
+        }
+
+        Jout[0][1] = (Fp[0] - Fm[0]) / (2.0 * hph);
+        Jout[1][1] = wrap_pi(Fp[1] - Fm[1]) / (2.0 * hph);
+        return std::isfinite(Jout[0][0]) && std::isfinite(Jout[1][0]) &&
+               std::isfinite(Jout[0][1]) && std::isfinite(Jout[1][1]);
+    };
+
+    CandidateState best = seeds[0];
+    bool ranAnySeed = false;
+
+    auto run_seed = [&](const CandidateState& seed) -> void
+    {
+        CandidateState curSeed = seed;
+        CandidateState bestSeed = curSeed;
+        double thetaSeed = curSeed.theta;
+        double phiSeed = curSeed.phi;
+        double lambda = std::clamp(P.lambdaInit, P.lambdaMin, P.lambdaMax);
+
+        double J[2][2];
+        if (!jacobian_direct_fd(thetaSeed, phiSeed, curSeed.F, J))
+        {
+            return;
+        }
+
+        ranAnySeed = true;
+
+        for (int it = 0; it < P.maxIter; ++it)
+        {
+            if (curSeed.miss <= P.tolMiss)
+            {
+                break;
+            }
+
+            bool accepted = false;
+            for (int lt = 0; lt < P.lambdaTries; ++lt)
+            {
+                double dtheta;
+                double dphi;
+                if (!solve_lm_step_2x2(J, curSeed.F, lambda, dtheta, dphi))
+                {
+                    lambda = std::clamp(lambda * P.lambdaUpMul, P.lambdaMin, P.lambdaMax);
+                    continue;
+                }
+
+                double alpha = 1.0;
+                CandidateState chosen = curSeed;
+                bool haveChosen = false;
+                const double missOld = curSeed.miss;
+                for (int ls = 0; ls < P.lineSearchTries; ++ls)
+                {
+                    const double thetaTry = std::clamp(thetaSeed + alpha * dtheta, P.thetaMin, P.thetaMax);
+                    const double phiTry = wrap_pi(phiSeed + alpha * dphi);
+                    CandidateState cand{};
+                    if (evaluate_candidate_direct(cand, thetaTry, phiTry, relPos0, relVel, relAcc, v0, kDrag, P))
+                    {
+                        if (!haveChosen || cand.miss < chosen.miss)
+                        {
+                            chosen = cand;
+                            haveChosen = true;
+                        }
+                        if (cand.miss <= missOld + P.missEps)
+                        {
+                            accepted = true;
+                            chosen = cand;
+                            break;
+                        }
+                    }
+                    alpha *= P.lineSearchShrink;
+                    if (alpha < P.alphaMin)
+                    {
+                        break;
+                    }
+                }
+
+                if (!accepted && haveChosen && chosen.miss < missOld)
+                {
+                    accepted = true;
+                }
+                if (!accepted)
+                {
+                    lambda = std::clamp(lambda * P.lambdaUpMul, P.lambdaMin, P.lambdaMax);
+                    continue;
+                }
+
+                report.acceptedSteps += 1;
+                if (chosen.miss < missOld - P.missEps)
+                {
+                    lambda = std::clamp(lambda * P.lambdaDownMul, P.lambdaMin, P.lambdaMax);
+                }
+
+                const double sdx[2] = { chosen.theta - thetaSeed, wrap_pi(chosen.phi - phiSeed) };
+                const double ydf[2] = { chosen.F[0] - curSeed.F[0], wrap_pi(chosen.F[1] - curSeed.F[1]) };
+                broyden_update(J, sdx, ydf, P.broydenMinDenom);
+
+                thetaSeed = chosen.theta;
+                phiSeed = wrap_pi(chosen.phi);
+                curSeed = chosen;
+                if (curSeed.miss < bestSeed.miss)
+                {
+                    bestSeed = curSeed;
+                }
+                break;
+            }
+
+            if (!accepted)
+            {
+                break;
+            }
+        }
+
+        if (bestSeed.miss < best.miss)
+        {
+            best = bestSeed;
+        }
+    };
+
+    for (int i = 0; i < seedCount; ++i)
+    {
+        run_seed(seeds[i]);
+        if (best.miss <= P.tolMiss)
+        {
+            break;
+        }
+    }
+
+    if (ranAnySeed && std::isfinite(best.miss) && best.miss < missBestAll)
+    {
+        thetaBestAll = best.theta;
+        phiBestAll = best.phi;
+        missBestAll = best.miss;
+        relBestAll = best.relMissAtStar;
+        tBestAll = best.tStar;
+        return true;
+    }
+    return false;
+}
+
 // ================================================================
 // Solve launch angles (Broyden)
 // ================================================================
@@ -1102,12 +1568,15 @@ inline SolverResult solve_launch_angles(
         !std::isfinite(P.g) || P.g <= 0.0 || !std::isfinite(P.dt) || P.dt <= 0.0 ||
         !std::isfinite(P.tMax) || P.tMax <= 0.0 || P.maxIter <= 0 ||
         !std::isfinite(P.lineSearchShrink) || P.lineSearchShrink <= 0.0 || P.lineSearchShrink >= 1.0 ||
+        !std::isfinite(P.beta) || P.beta <= 0.0 ||
         P.thetaMin >= P.thetaMax)
     {
         out.report.status = SolveStatus::InvalidInput;
         out.report.message = "InvalidInput: v0/g/dt/tMax/maxIter/theta range check failed.";
         return out;
     }
+
+    BallisticParams residualP = P;
 
     auto pick_fd_step = [&](double x) -> double
     {
@@ -1129,11 +1598,11 @@ inline SolverResult solve_launch_angles(
 
         if (canMinus && canPlus)
         {
-            if (!compute_angle_residual_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp))
+            if (!compute_angle_residual_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, residualP, Fp, mTmp, relTmp, tTmp))
             {
                 return false;
             }
-            if (!compute_angle_residual_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
+            if (!compute_angle_residual_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, residualP, Fm, mTmp, relTmp, tTmp))
             {
                 return false;
             }
@@ -1143,7 +1612,7 @@ inline SolverResult solve_launch_angles(
         }
         else if (canPlus)
         {
-            if (!compute_angle_residual_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp))
+            if (!compute_angle_residual_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, residualP, Fp, mTmp, relTmp, tTmp))
             {
                 return false;
             }
@@ -1153,7 +1622,7 @@ inline SolverResult solve_launch_angles(
         }
         else if (canMinus)
         {
-            if (!compute_angle_residual_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
+            if (!compute_angle_residual_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, residualP, Fm, mTmp, relTmp, tTmp))
             {
                 return false;
             }
@@ -1171,11 +1640,11 @@ inline SolverResult solve_launch_angles(
         const double php = wrap_pi(ph + hph);
         const double phm = wrap_pi(ph - hph);
 
-        if (!compute_angle_residual_acc(th, php, relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp))
+        if (!compute_angle_residual_acc(th, php, relPos0, relVel, relAcc, v0, kDrag, residualP, Fp, mTmp, relTmp, tTmp))
         {
             return false;
         }
-        if (!compute_angle_residual_acc(th, phm, relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
+        if (!compute_angle_residual_acc(th, phm, relPos0, relVel, relAcc, v0, kDrag, residualP, Fm, mTmp, relTmp, tTmp))
         {
             return false;
         }
@@ -1200,7 +1669,7 @@ inline SolverResult solve_launch_angles(
     Vec3 relMissAtStar{};
     double tStar = std::numeric_limits<double>::quiet_NaN();
 
-    if (!compute_angle_residual_acc(theta, phi, relPos0, relVel, relAcc, v0, kDrag, P, F, miss, relMissAtStar, tStar))
+    if (!compute_angle_residual_acc(theta, phi, relPos0, relVel, relAcc, v0, kDrag, residualP, F, miss, relMissAtStar, tStar))
     {
         out.theta = theta;
         out.phi = phi;
@@ -1223,7 +1692,37 @@ inline SolverResult solve_launch_angles(
     Vec3 relBestAll = relMissAtStar;
     double tBestAll = tStar;
 
-    // Jacobian init
+    if (miss > P.tolMiss)
+    {
+        CandidateState preStep{};
+        double preDtheta;
+        double preDphi;
+        const Vec3 preAim = target_pos_acc(relPos0, relVel, relAcc, tStar);
+        const bool havePreStep = compute_aux_angle_delta(
+            preAim, relMissAtStar, P.preStepBeta, v0, P, preDtheta, preDphi);
+        const double thetaTry = std::clamp(theta + (havePreStep ? preDtheta : F[0]), P.thetaMin, P.thetaMax);
+        const double phiTry = wrap_pi(phi + (havePreStep ? preDphi : F[1]));
+        if (evaluate_candidate(preStep, thetaTry, phiTry, relPos0, relVel, relAcc, v0, kDrag, residualP) &&
+            std::isfinite(preStep.miss) && preStep.miss < miss)
+        {
+            theta = preStep.theta;
+            phi = wrap_pi(preStep.phi);
+
+            F[0] = preStep.F[0];
+            F[1] = preStep.F[1];
+
+            miss = preStep.miss;
+            relMissAtStar = preStep.relMissAtStar;
+            tStar = preStep.tStar;
+
+            thetaBestAll = theta;
+            phiBestAll = phi;
+            missBestAll = miss;
+            relBestAll = relMissAtStar;
+            tBestAll = tStar;
+        }
+    }
+
     double J[2][2];
     if (!jacobian_fd(theta, phi, F, J))
     {
@@ -1266,13 +1765,12 @@ inline SolverResult solve_launch_angles(
         }
 
         bool acceptedGlobal = false;
-
         for (int lt = 0; lt < P.lambdaTries; ++lt)
         {
             if (try_lambda_tried_step(
                     theta, phi, F, miss, relMissAtStar, tStar,
                     J, lambda,
-                    relPos0, relVel, relAcc, v0, kDrag, P,
+                    relPos0, relVel, relAcc, v0, kDrag, residualP,
                     out.report))
             {
                 acceptedGlobal = true;
@@ -1303,10 +1801,49 @@ inline SolverResult solve_launch_angles(
 
         if (!acceptedGlobal)
         {
-            out.report.status = SolveStatus::LambdaTriesExhausted;
-            out.report.message = "LambdaTriesExhausted: no acceptable step within lambdaTries.";
-            break;
+            double auxDtheta;
+            double auxDphi;
+            const Vec3 auxAim = target_pos_acc(relPos0, relVel, relAcc, tStar);
+            if (compute_aux_angle_delta(auxAim, relMissAtStar, P.preStepBeta, v0, P, auxDtheta, auxDphi))
+            {
+                const double missOld = miss;
+                StepResult auxStep = line_search_best(
+                    theta, phi, F, miss, relMissAtStar, tStar,
+                    auxDtheta, auxDphi,
+                    relPos0, relVel, relAcc, v0, kDrag, residualP,
+                    out.report);
+                acceptedGlobal = apply_accepted_step_and_update_jacobian(
+                    theta, phi, F, miss, relMissAtStar, tStar,
+                    J, lambda, residualP,
+                    auxStep, missOld,
+                    out.report);
+                if (acceptedGlobal && std::isfinite(miss) && (!std::isfinite(missBestAll) || (miss < missBestAll)))
+                {
+                    thetaBestAll = theta;
+                    phiBestAll = phi;
+                    missBestAll = miss;
+                    relBestAll = relMissAtStar;
+                    tBestAll = tStar;
+                }
+            }
+
+            if (!acceptedGlobal)
+            {
+                out.report.status = SolveStatus::LambdaTriesExhausted;
+                out.report.message = "LambdaTriesExhausted: no acceptable step within lambdaTries.";
+                break;
+            }
         }
+    }
+
+    if (!std::isfinite(missBestAll) || missBestAll > P.tolMiss)
+    {
+        BallisticParams directP = P;
+        directP.beta = P.beta;
+        solve_direct_fallback(
+            thetaBestAll, phiBestAll, missBestAll, relBestAll, tBestAll,
+            relPos0, relVel, relAcc, v0, kDrag, directP,
+            out.report);
     }
 
     // Return final (best-so-far) result
