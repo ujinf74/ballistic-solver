@@ -372,19 +372,19 @@ Reference result from a local Windows Release build, 500 generated linear-target
 cases:
 
 ```text
-fast:     median 0.094 ms, p95 0.228 ms, p95 miss 3.834e-02 m
-balanced: median 0.182 ms, p95 0.452 ms, p95 miss 5.351e-03 m
-precise:  median 0.199 ms, p95 0.569 ms, p95 miss 5.742e-06 m
+fast:     500/500, median 0.104 ms, p95 0.229 ms, p95 miss 3.399e-02 m
+balanced: 500/500, median 0.211 ms, p95 0.480 ms, p95 miss 7.287e-03 m
+precise:  500/500, median 0.260 ms, p95 0.600 ms, p95 miss 7.655e-06 m
 ```
 
-High-arc moving-target convergence update, local Windows Release build,
-generated linear-target cases:
+Current default solver results from the same local Windows Release build, 500
+generated cases with seed `20260503`:
 
-| Solver configuration | Success | Runtime summary | P95 miss |
-|---|---:|---:|---:|
-| Pre-v0.6 high-arc path | 469/500 (93.80%) | 4.006 ms/case | not recorded |
-| v0.6.0 defaults | 490/500 (98.00%) | median 1.845 ms, p95 2.535 ms | 8.809e-03 m |
-| v0.6.1 defaults | 5000/5000 (100.00%) | median 2.501 ms, p95 4.975 ms | 8.369e-03 m |
+| Case set | Success | Median runtime | P95 runtime | P95 miss |
+|---|---:|---:|---:|---:|
+| Low arc, moving target | 500/500 (100.00%) | 0.535 ms | 1.183 ms | 5.876e-03 m |
+| High arc, stationary target | 500/500 (100.00%) | 1.263 ms | 1.997 ms | 7.824e-03 m |
+| High arc, moving target | 500/500 (100.00%) | 1.453 ms | 2.991 ms | 8.452e-03 m |
 
 ---
 
