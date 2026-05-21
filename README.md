@@ -365,26 +365,26 @@ vacuum cases, unreachable-target checks, randomized linear cases, and
 constant-acceleration API smoke coverage.
 
 Benchmark numbers depend on CPU, OS, compiler, build type, Python version, and
-whether native or Python entrypoints are measured. Record those fields when
-publishing comparisons.
+whether native or Python entrypoints are measured. The local reference below was
+measured on Windows NT 10.0.26200.0, AMD Ryzen 9 6900HS, Python 3.12.8, MSVC
+14.44.35207, x64 Release build, through the Python native extension.
 
-Reference result from a local Windows Release build, 500 generated linear-target
-cases:
+Reference preset result from the same local Release build:
 
 ```text
-fast:     500/500, median 0.104 ms, p95 0.229 ms, p95 miss 3.399e-02 m
-balanced: 500/500, median 0.211 ms, p95 0.480 ms, p95 miss 7.287e-03 m
-precise:  500/500, median 0.260 ms, p95 0.600 ms, p95 miss 7.655e-06 m
+fast:     500/500, median 0.097 ms, p95 0.252 ms, p95 miss 3.425e-02 m
+balanced: 500/500, median 0.191 ms, p95 0.501 ms, p95 miss 4.803e-03 m
+precise:  500/500, median 0.200 ms, p95 0.582 ms, p95 miss 5.086e-06 m
 ```
 
-Current default solver results from the same local Windows Release build, 500
-generated cases with seed `20260503`:
+Current default solver results from 10,000 generated cases with seed `20260503`.
+The last row is the high-arc moving-target stress case:
 
 | Case set | Success | Median runtime | P95 runtime | P95 miss |
 |---|---:|---:|---:|---:|
-| Low arc, moving target | 500/500 (100.00%) | 0.535 ms | 1.183 ms | 5.876e-03 m |
-| High arc, stationary target | 500/500 (100.00%) | 1.263 ms | 1.997 ms | 7.824e-03 m |
-| High arc, moving target | 500/500 (100.00%) | 1.453 ms | 2.991 ms | 8.452e-03 m |
+| Low arc, moving target | 10000/10000 (100.00%) | 0.434 ms | 0.871 ms | 5.915e-03 m |
+| High arc, stationary target | 10000/10000 (100.00%) | 1.234 ms | 1.939 ms | 7.961e-03 m |
+| High arc, moving target | 10000/10000 (100.00%) | 1.319 ms | 2.503 ms | 8.308e-03 m |
 
 ---
 
