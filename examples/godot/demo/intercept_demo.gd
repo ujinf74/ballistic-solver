@@ -84,7 +84,7 @@ func _fire() -> void:
 	var t_star := float(sol["t_star"])
 	pred_marker.position = tracker.predict(t_star)
 
-	var steps := max(12, int(ceil(t_star / 0.02)))
+	var steps: int = max(12, int(ceil(t_star / 0.02)))
 	var pts := PackedVector3Array(solver.simulate_from_angles(
 		MUZZLE_SPEED, theta, phi, K_DRAG, t_star, t_star / float(steps)))
 	if pts.is_empty():
