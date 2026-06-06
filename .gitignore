@@ -73,6 +73,9 @@ examples/godot/.godot/
 examples/godot/.sconsign.dblite
 examples/godot/ballistic_solver.dll
 
+# Visualization render outputs
+examples/viz/renders/
+
 # Assets
 assets/
 examples/unity/Assets/
