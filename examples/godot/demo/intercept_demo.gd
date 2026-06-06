@@ -1,22 +1,24 @@
 extends Node3D
 
-# CIWS-style showcase: a weaving target is tracked from NOISY position-only
-# radar measurements via BallisticTracker (CA-Kalman), and the gun fires a
+# Moving-target intercept showcase. A target is tracked from NOISY, position-only
+# measurements via BallisticTracker (CA-Kalman), and the launcher fires a
 # continuous burst using the tracker's lead-fire solution. Rounds are simulated
-# and scored against the TRUE target so hits (green) reflect real intercepts.
-# Units are metres; the gun sits at the origin, +Y is up.
+# and scored against the TRUE target so green markers reflect real intercepts.
+# The same machinery applies to robotics, perimeter security, agricultural
+# deterrence, games/sim, and defense -- it only sees relative kinematics.
+# Units are metres; the launcher sits at the origin, +Y is up.
 
-const TARGET_START := Vector3(560.0, 14.0, 70.0)
-const TARGET_VEL := Vector3(-140.0, 0.0, -20.0)
-const WEAVE_AMP := 22.0        # lateral (Z) weave amplitude, m
-const WEAVE_OMEGA := 2.6       # weave angular rate, rad/s
-const MUZZLE_SPEED := 450.0
-const K_DRAG := 0.005
-const MEAS_NOISE := 1.2        # radar position noise std, m
-const PROCESS_NOISE := 8.0     # tracker jerk spectral density
-const FIRE_INTERVAL := 0.18
-const FIRE_RANGE := 400.0
-const MIN_RANGE := 70.0
+const TARGET_START := Vector3(360.0, 30.0, 50.0)
+const TARGET_VEL := Vector3(-95.0, 0.0, -14.0)
+const WEAVE_AMP := 8.0         # lateral (Z) maneuver amplitude, m
+const WEAVE_OMEGA := 1.6       # maneuver angular rate, rad/s
+const MUZZLE_SPEED := 400.0
+const K_DRAG := 0.006
+const MEAS_NOISE := 1.0        # position measurement noise std, m
+const PROCESS_NOISE := 4.0     # tracker jerk spectral density
+const FIRE_INTERVAL := 0.16
+const FIRE_RANGE := 300.0
+const MIN_RANGE := 50.0
 const HIT_THRESH := 4.0
 const RUN_TIME := 4.5
 const RESET_DELAY := 2.5
@@ -130,8 +132,7 @@ func _update_status(rng: float) -> void:
 	var pk := 0.0
 	if fired > 0:
 		pk = 100.0 * float(hits) / float(fired)
-	status_label.text = "weaving target (~%.0fg)  t=%.1fs  range=%.0fm  fired=%d  hits<%.0fm=%d (%.0f%%)  best=%.2fm" % [
-		WEAVE_AMP * WEAVE_OMEGA * WEAVE_OMEGA / 9.80665,
+	status_label.text = "moving-target intercept  t=%.1fs  range=%.0fm  fired=%d  hits<%.0fm=%d (%.0f%%)  best=%.2fm" % [
 		elapsed, rng, fired, HIT_THRESH, hits, pk,
 		(best_miss if best_miss < INF else 0.0)
 	]
@@ -185,7 +186,7 @@ func _remove_projectile(index: int) -> void:
 func _build_scene() -> void:
 	var camera := Camera3D.new()
 	camera.fov = 50.0
-	camera.look_at_from_position(Vector3(180.0, 220.0, 360.0), Vector3(220.0, 0.0, 0.0), Vector3.UP)
+	camera.look_at_from_position(Vector3(120.0, 150.0, 250.0), Vector3(160.0, 0.0, 0.0), Vector3.UP)
 	camera.current = true
 	add_child(camera)
 
@@ -195,9 +196,9 @@ func _build_scene() -> void:
 
 	var ground := MeshInstance3D.new()
 	var ground_mesh := PlaneMesh.new()
-	ground_mesh.size = Vector2(1400.0, 700.0)
+	ground_mesh.size = Vector2(900.0, 500.0)
 	ground.mesh = ground_mesh
-	ground.position = Vector3(300.0, 0.0, 0.0)
+	ground.position = Vector3(180.0, 0.0, 0.0)
 	var ground_mat := StandardMaterial3D.new()
 	ground_mat.albedo_color = Color(0.10, 0.13, 0.16)
 	ground.material_override = ground_mat

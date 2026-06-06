@@ -16,7 +16,7 @@ examples/godot/
   addons/ballistic_solver/ballistic_solver.gdextension
   addons/ballistic_solver/plugin.cfg
   demo/ballistic_demo.gd     # perfect-info lead-fire demo
-  demo/ciws_demo.gd          # CIWS-style noisy-radar tracker demo (default scene)
+  demo/intercept_demo.gd     # noisy-track tracker intercept demo (default scene)
   src/ballistic_solver_gd.h
   src/ballistic_solver_gd.cpp
   SConstruct
@@ -30,12 +30,14 @@ examples/godot/
   meas)`, `update(t, rel_pos)`, `predict(tau)`, `estimated_position/velocity/
   acceleration()`, and `solve(v0, k_drag, arc_mode)` for lead-fire via the
   predictor seam. Adding it changed the extension source, so **rebuild the
-  GDExtension** (see below) before the CIWS demo will run.
+  GDExtension** (see below) before the intercept demo will run.
 
-The CIWS demo (`demo/ciws_demo.tscn`, the default main scene) feeds the tracker
-NOISY radar measurements of a weaving target and fires a continuous burst from
-the tracker's lead solution; rounds are scored against the true target, so green
-hit markers reflect real intercepts and the HUD shows the running hit rate.
+The intercept demo (`demo/intercept_demo.tscn`, the default main scene) feeds the
+tracker NOISY position-only measurements of a moving target and fires a
+continuous burst from the tracker's lead solution; rounds are scored against the
+true target, so green markers reflect real intercepts and the HUD shows the
+running hit rate. The same machinery applies across domains (robotics, perimeter
+security, agricultural deterrence, games/sim, defense).
 
 ## Build outline
 
@@ -75,10 +77,10 @@ Then open this folder as a Godot project.
 After building, run the demo scene from the command line:
 
 ```bash
-godot --path . res://demo/ciws_demo.tscn --quit-after 5
+godot --path . res://demo/intercept_demo.tscn --quit-after 5
 ```
 
-The CIWS scene tracks a weaving target from noisy measurements and fires a burst;
+The intercept scene tracks a moving target from noisy measurements and fires a burst;
 expect red radar dots around the target, a yellow predicted-intercept marker,
 grey rounds in flight, and green hit markers with a hit-rate HUD. The simpler
 `res://demo/ballistic_demo.tscn` instantiates `BallisticSolver`, calls `solve`,

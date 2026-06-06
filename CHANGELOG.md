@@ -25,9 +25,11 @@ All notable changes to this project are documented here. Versions follow
   (`benchmarks/predictor_eval.py`).
 
 - Examples: the Godot GDExtension exposes a `BallisticTracker` class (wrapping
-  the C++ `TargetTracker` directly), and a new `demo/ciws_demo.tscn` showcase
-  tracks a weaving target from noisy radar and fires a scored burst. Python
-  `examples/viz/ciws_viz.py` renders miss-vs-range curves and an engagement GIF.
+  the C++ `TargetTracker` directly), and a new `demo/intercept_demo.tscn`
+  showcase tracks a moving target from a noisy position-only feed and fires a
+  scored burst. `benchmarks/intercept_eval.py` covers robotics / security /
+  agriculture / defense scenarios, and `examples/viz/intercept_viz.py` renders
+  miss-vs-range curves and an engagement GIF (matplotlib, optional).
 
 ### Changed
 
@@ -57,8 +59,8 @@ All notable changes to this project are documented here. Versions follow
 
 - Solver: auxiliary multi-start fallback refactor (deduplicated residual path,
   clearer naming). High-arc and moving-target convergence verified at
-  10000/10000 across low/high x stationary/moving case sets via
-  `tools/bench_variants/compare_algorithms.py`.
+  10000/10000 across low/high x stationary/moving case sets (local
+  algorithm-comparison harness; `tests/random_regression.py` guards a subset).
 
 ### Documentation / tooling
 
