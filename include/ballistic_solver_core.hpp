@@ -114,7 +114,7 @@ struct BallisticParams
 
     double tolMiss = 1e-2;     // Success tolerance (miss distance)
     double beta = 0.04;        // Residual target offset correction factor
-    double preStepBeta = 1.0; // One-shot pre-LM correction factor
+    double preStepBeta = 1.0;  // One-shot pre-LM correction factor
 
     int maxIter = 20;
 
@@ -836,7 +836,7 @@ inline bool compute_angle_residual(
     return compute_angle_residual_acc(theta, phi, relPos0, relVel, zeroAcc, v0, kDrag, P, F, miss, relMissAtStar_out, tStar_out);
 }
 
-inline bool compute_aux_angle_delta(
+inline bool compute_auxiliary_delta(
     const Vec3& aim,
     const Vec3& relMissAtStar,
     double beta,
@@ -890,7 +890,7 @@ inline bool compute_angle_residual_acc(
 
     const Vec3 aim = target_pos_acc(relPos0, relVel, relAcc, tStar);
     double dtheta, dphi;
-    if (!compute_aux_angle_delta(aim, relMissAtStar, P.beta, v0, P, dtheta, dphi))
+    if (!compute_auxiliary_delta(aim, relMissAtStar, P.beta, v0, P, dtheta, dphi))
     {
         return false;
     }
@@ -1045,79 +1045,6 @@ inline bool evaluate_candidate(
     return std::isfinite(out.miss) && std::isfinite(out.F[0]) && std::isfinite(out.F[1]);
 }
 
-inline bool compute_angle_residual_direct_acc(
-    double theta,
-    double phi,
-    const Vec3& relPos0,
-    const Vec3& relVel,
-    const Vec3& relAcc,
-    double v0,
-    double kDrag,
-    const BallisticParams& P,
-    double F[2],
-    double& miss,
-    Vec3& relMissAtStar_out,
-    double& tStar_out)
-{
-    const Vec3 dir = angles_to_dir(theta, phi);
-    const Vec3 projVel0 = v0 * dir;
-
-    Vec3 relMissAtStar;
-    double tStar;
-    find_closest_approach_acc(projVel0, relPos0, relVel, relAcc, kDrag, P, relMissAtStar, tStar);
-
-    miss = norm(relMissAtStar);
-    relMissAtStar_out = relMissAtStar;
-    tStar_out = tStar;
-
-    const Vec3 aim = target_pos_acc(relPos0, relVel, relAcc, tStar);
-    const Vec3 aimCorr = aim - P.beta * relMissAtStar;
-
-    double th0;
-    double ph0;
-    double th1;
-    double ph1;
-    vec_to_angles(aim, th0, ph0);
-    vec_to_angles(aimCorr, th1, ph1);
-
-    F[0] = th1 - th0;
-    F[1] = wrap_pi(ph1 - ph0);
-
-    return std::isfinite(miss) && std::isfinite(F[0]) && std::isfinite(F[1]);
-}
-
-inline bool evaluate_candidate_direct(
-    CandidateState& out,
-    double thetaTry,
-    double phiTry,
-    const Vec3& relPos0,
-    const Vec3& relVel,
-    const Vec3& relAcc,
-    double v0,
-    double kDrag,
-    const BallisticParams& P)
-{
-    double Fnew[2];
-    double mTry;
-    Vec3 relTry;
-    double tTry;
-
-    if (!compute_angle_residual_direct_acc(thetaTry, phiTry, relPos0, relVel, relAcc, v0, kDrag, P, Fnew, mTry, relTry, tTry))
-    {
-        return false;
-    }
-
-    out.theta = thetaTry;
-    out.phi = phiTry;
-    out.F[0] = Fnew[0];
-    out.F[1] = Fnew[1];
-    out.miss = mTry;
-    out.relMissAtStar = relTry;
-    out.tStar = tTry;
-
-    return std::isfinite(out.miss) && std::isfinite(out.F[0]) && std::isfinite(out.F[1]);
-}
-
 inline StepResult line_search_best(
     double theta,
     double phi,
@@ -1195,7 +1122,7 @@ inline StepResult line_search_best(
     return res;
 }
 
-inline bool apply_accepted_step_and_update_jacobian(
+inline bool accept_step(
     double& theta,
     double& phi,
     double F[2],
@@ -1248,7 +1175,7 @@ inline bool apply_accepted_step_and_update_jacobian(
     return true;
 }
 
-inline bool try_lambda_tried_step(
+inline bool try_lm_step(
     double& theta,
     double& phi,
     double F[2],
@@ -1291,19 +1218,60 @@ inline bool try_lambda_tried_step(
         return false;
     }
 
-    return apply_accepted_step_and_update_jacobian(
+    return accept_step(
         theta, phi, F, miss, relMissAtStar, tStar,
         J, lambda, P,
         step, missOld,
         report);
 }
 
-inline bool solve_direct_fallback(
-    double& thetaBestAll,
-    double& phiBestAll,
-    double& missBestAll,
-    Vec3& relBestAll,
-    double& tBestAll,
+inline Vec3 vacuum_required_displacement(
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    const Vec3& relAcc,
+    double g,
+    double t)
+{
+    return target_pos_acc(relPos0, relVel, relAcc, t) + Vec3{ 0.0, 0.0, 0.5 * g * t * t };
+}
+
+template <std::size_t N>
+inline void add_time_grid_seeds(
+    std::array<CandidateState, N>& seeds,
+    int& seedCount,
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    const Vec3& relAcc,
+    double v0,
+    double kDrag,
+    const BallisticParams& P)
+{
+    for (int i = 3; i <= 5 && seedCount < static_cast<int>(N); ++i)
+    {
+        const double u = static_cast<double>(i) / 10.0;
+        const double t = std::max(P.dt, P.tMax * (0.2 + 0.8 * u));
+        const Vec3 aim = vacuum_required_displacement(relPos0, relVel, relAcc, P.g, t);
+
+        double theta;
+        double phi;
+        vec_to_angles(aim, theta, phi);
+        theta = std::clamp(theta, P.thetaMin, P.thetaMax);
+        phi = wrap_pi(phi);
+
+        CandidateState cand{};
+        if (evaluate_candidate(cand, theta, phi, relPos0, relVel, relAcc, v0, kDrag, P))
+        {
+            seeds[seedCount++] = cand;
+        }
+    }
+}
+
+inline bool solve_auxiliary_multistart(
+    double& bestTheta,
+    double& bestPhi,
+    double& bestMiss,
+    Vec3& bestRelMiss,
+    double& bestTime,
     const Vec3& relPos0,
     const Vec3& relVel,
     const Vec3& relAcc,
@@ -1318,32 +1286,16 @@ inline bool solve_direct_fallback(
     theta = std::clamp(theta, P.thetaMin, P.thetaMax);
     phi = wrap_pi(phi);
 
-    std::array<CandidateState, 12> seeds{};
+    std::array<CandidateState, 4> seeds{};
     int seedCount = 0;
 
     CandidateState cur{};
-    if (evaluate_candidate_direct(cur, theta, phi, relPos0, relVel, relAcc, v0, kDrag, P))
+    if (evaluate_candidate(cur, theta, phi, relPos0, relVel, relAcc, v0, kDrag, P))
     {
         seeds[seedCount++] = cur;
     }
 
-    for (int i = 0; i <= 10; ++i)
-    {
-        const double u = static_cast<double>(i) / 10.0;
-        const double tGuess = std::max(P.dt, P.tMax * (0.2 + 0.8 * u));
-        const Vec3 aim = target_pos_acc(relPos0, relVel, relAcc, tGuess) + Vec3{ 0.0, 0.0, 0.5 * P.g * tGuess * tGuess };
-        double thGuess;
-        double phGuess;
-        vec_to_angles(aim, thGuess, phGuess);
-        thGuess = std::clamp(thGuess, P.thetaMin, P.thetaMax);
-        phGuess = wrap_pi(phGuess);
-
-        CandidateState cand{};
-        if (evaluate_candidate_direct(cand, thGuess, phGuess, relPos0, relVel, relAcc, v0, kDrag, P))
-        {
-            seeds[seedCount++] = cand;
-        }
-    }
+    add_time_grid_seeds(seeds, seedCount, relPos0, relVel, relAcc, v0, kDrag, P);
 
     if (seedCount == 0)
     {
@@ -1361,7 +1313,7 @@ inline bool solve_direct_fallback(
         return std::clamp(h, P.fdMin, P.fdMax);
     };
 
-    auto jacobian_direct_fd = [&](double th, double ph, const double Fbase[2], double Jout[2][2]) -> bool
+    auto jacobian_aux_fd = [&](double th, double ph, const double Fbase[2], double Jout[2][2]) -> bool
     {
         double Fp[2], Fm[2];
         double mTmp;
@@ -1374,8 +1326,8 @@ inline bool solve_direct_fallback(
 
         if (canMinus && canPlus)
         {
-            if (!compute_angle_residual_direct_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp) ||
-                !compute_angle_residual_direct_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
+            if (!compute_angle_residual_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp) ||
+                !compute_angle_residual_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
             {
                 return false;
             }
@@ -1384,7 +1336,7 @@ inline bool solve_direct_fallback(
         }
         else if (canPlus)
         {
-            if (!compute_angle_residual_direct_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp))
+            if (!compute_angle_residual_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp))
             {
                 return false;
             }
@@ -1393,7 +1345,7 @@ inline bool solve_direct_fallback(
         }
         else if (canMinus)
         {
-            if (!compute_angle_residual_direct_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
+            if (!compute_angle_residual_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
             {
                 return false;
             }
@@ -1406,8 +1358,8 @@ inline bool solve_direct_fallback(
         }
 
         const double hph = pick_fd_step(ph);
-        if (!compute_angle_residual_direct_acc(th, wrap_pi(ph + hph), relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp) ||
-            !compute_angle_residual_direct_acc(th, wrap_pi(ph - hph), relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
+        if (!compute_angle_residual_acc(th, wrap_pi(ph + hph), relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp) ||
+            !compute_angle_residual_acc(th, wrap_pi(ph - hph), relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
         {
             return false;
         }
@@ -1423,14 +1375,14 @@ inline bool solve_direct_fallback(
 
     auto run_seed = [&](const CandidateState& seed) -> void
     {
-        CandidateState curSeed = seed;
-        CandidateState bestSeed = curSeed;
-        double thetaSeed = curSeed.theta;
-        double phiSeed = curSeed.phi;
+        CandidateState current = seed;
+        CandidateState localBest = current;
+        double thetaSeed = current.theta;
+        double phiSeed = current.phi;
         double lambda = std::clamp(P.lambdaInit, P.lambdaMin, P.lambdaMax);
 
         double J[2][2];
-        if (!jacobian_direct_fd(thetaSeed, phiSeed, curSeed.F, J))
+        if (!jacobian_aux_fd(thetaSeed, phiSeed, current.F, J))
         {
             return;
         }
@@ -1439,7 +1391,7 @@ inline bool solve_direct_fallback(
 
         for (int it = 0; it < P.maxIter; ++it)
         {
-            if (curSeed.miss <= P.tolMiss)
+            if (current.miss <= P.tolMiss)
             {
                 break;
             }
@@ -1449,22 +1401,22 @@ inline bool solve_direct_fallback(
             {
                 double dtheta;
                 double dphi;
-                if (!solve_lm_step_2x2(J, curSeed.F, lambda, dtheta, dphi))
+                if (!solve_lm_step_2x2(J, current.F, lambda, dtheta, dphi))
                 {
                     lambda = std::clamp(lambda * P.lambdaUpMul, P.lambdaMin, P.lambdaMax);
                     continue;
                 }
 
                 double alpha = 1.0;
-                CandidateState chosen = curSeed;
+                CandidateState chosen = current;
                 bool haveChosen = false;
-                const double missOld = curSeed.miss;
+                const double missOld = current.miss;
                 for (int ls = 0; ls < P.lineSearchTries; ++ls)
                 {
                     const double thetaTry = std::clamp(thetaSeed + alpha * dtheta, P.thetaMin, P.thetaMax);
                     const double phiTry = wrap_pi(phiSeed + alpha * dphi);
                     CandidateState cand{};
-                    if (evaluate_candidate_direct(cand, thetaTry, phiTry, relPos0, relVel, relAcc, v0, kDrag, P))
+                    if (evaluate_candidate(cand, thetaTry, phiTry, relPos0, relVel, relAcc, v0, kDrag, P))
                     {
                         if (!haveChosen || cand.miss < chosen.miss)
                         {
@@ -1502,15 +1454,15 @@ inline bool solve_direct_fallback(
                 }
 
                 const double sdx[2] = { chosen.theta - thetaSeed, wrap_pi(chosen.phi - phiSeed) };
-                const double ydf[2] = { chosen.F[0] - curSeed.F[0], wrap_pi(chosen.F[1] - curSeed.F[1]) };
+                const double ydf[2] = { chosen.F[0] - current.F[0], wrap_pi(chosen.F[1] - current.F[1]) };
                 broyden_update(J, sdx, ydf, P.broydenMinDenom);
 
                 thetaSeed = chosen.theta;
                 phiSeed = wrap_pi(chosen.phi);
-                curSeed = chosen;
-                if (curSeed.miss < bestSeed.miss)
+                current = chosen;
+                if (current.miss < localBest.miss)
                 {
-                    bestSeed = curSeed;
+                    localBest = current;
                 }
                 break;
             }
@@ -1521,9 +1473,9 @@ inline bool solve_direct_fallback(
             }
         }
 
-        if (bestSeed.miss < best.miss)
+        if (localBest.miss < best.miss)
         {
-            best = bestSeed;
+            best = localBest;
         }
     };
 
@@ -1536,13 +1488,13 @@ inline bool solve_direct_fallback(
         }
     }
 
-    if (ranAnySeed && std::isfinite(best.miss) && best.miss < missBestAll)
+    if (ranAnySeed && std::isfinite(best.miss) && best.miss < bestMiss)
     {
-        thetaBestAll = best.theta;
-        phiBestAll = best.phi;
-        missBestAll = best.miss;
-        relBestAll = best.relMissAtStar;
-        tBestAll = best.tStar;
+        bestTheta = best.theta;
+        bestPhi = best.phi;
+        bestMiss = best.miss;
+        bestRelMiss = best.relMissAtStar;
+        bestTime = best.tStar;
         return true;
     }
     return false;
@@ -1686,11 +1638,11 @@ inline SolverResult solve_launch_angles(
     }
 
     // best-so-far
-    double thetaBestAll = theta;
-    double phiBestAll = phi;
-    double missBestAll = miss;
-    Vec3 relBestAll = relMissAtStar;
-    double tBestAll = tStar;
+    double bestTheta = theta;
+    double bestPhi = phi;
+    double bestMiss = miss;
+    Vec3 bestRelMiss = relMissAtStar;
+    double bestTime = tStar;
 
     if (miss > P.tolMiss)
     {
@@ -1698,7 +1650,7 @@ inline SolverResult solve_launch_angles(
         double preDtheta;
         double preDphi;
         const Vec3 preAim = target_pos_acc(relPos0, relVel, relAcc, tStar);
-        const bool havePreStep = compute_aux_angle_delta(
+        const bool havePreStep = compute_auxiliary_delta(
             preAim, relMissAtStar, P.preStepBeta, v0, P, preDtheta, preDphi);
         const double thetaTry = std::clamp(theta + (havePreStep ? preDtheta : F[0]), P.thetaMin, P.thetaMax);
         const double phiTry = wrap_pi(phi + (havePreStep ? preDphi : F[1]));
@@ -1715,22 +1667,22 @@ inline SolverResult solve_launch_angles(
             relMissAtStar = preStep.relMissAtStar;
             tStar = preStep.tStar;
 
-            thetaBestAll = theta;
-            phiBestAll = phi;
-            missBestAll = miss;
-            relBestAll = relMissAtStar;
-            tBestAll = tStar;
+            bestTheta = theta;
+            bestPhi = phi;
+            bestMiss = miss;
+            bestRelMiss = relMissAtStar;
+            bestTime = tStar;
         }
     }
 
     double J[2][2];
     if (!jacobian_fd(theta, phi, F, J))
     {
-        out.theta = thetaBestAll;
-        out.phi = phiBestAll;
-        out.miss = missBestAll;
-        out.relMissAtStar = relBestAll;
-        out.tStar = tBestAll;
+        out.theta = bestTheta;
+        out.phi = bestPhi;
+        out.miss = bestMiss;
+        out.relMissAtStar = bestRelMiss;
+        out.tStar = bestTime;
 
         out.report.status = SolveStatus::JacobianFailed;
         out.report.message = "JacobianFailed: initial FD Jacobian evaluation failed.";
@@ -1767,7 +1719,7 @@ inline SolverResult solve_launch_angles(
         bool acceptedGlobal = false;
         for (int lt = 0; lt < P.lambdaTries; ++lt)
         {
-            if (try_lambda_tried_step(
+            if (try_lm_step(
                     theta, phi, F, miss, relMissAtStar, tStar,
                     J, lambda,
                     relPos0, relVel, relAcc, v0, kDrag, residualP,
@@ -1775,13 +1727,13 @@ inline SolverResult solve_launch_angles(
             {
                 acceptedGlobal = true;
 
-                if (std::isfinite(miss) && (!std::isfinite(missBestAll) || (miss < missBestAll)))
+                if (std::isfinite(miss) && (!std::isfinite(bestMiss) || (miss < bestMiss)))
                 {
-                    thetaBestAll = theta;
-                    phiBestAll = phi;
-                    missBestAll = miss;
-                    relBestAll = relMissAtStar;
-                    tBestAll = tStar;
+                    bestTheta = theta;
+                    bestPhi = phi;
+                    bestMiss = miss;
+                    bestRelMiss = relMissAtStar;
+                    bestTime = tStar;
                 }
 
                 break;
@@ -1804,7 +1756,7 @@ inline SolverResult solve_launch_angles(
             double auxDtheta;
             double auxDphi;
             const Vec3 auxAim = target_pos_acc(relPos0, relVel, relAcc, tStar);
-            if (compute_aux_angle_delta(auxAim, relMissAtStar, P.preStepBeta, v0, P, auxDtheta, auxDphi))
+            if (compute_auxiliary_delta(auxAim, relMissAtStar, P.preStepBeta, v0, P, auxDtheta, auxDphi))
             {
                 const double missOld = miss;
                 StepResult auxStep = line_search_best(
@@ -1812,18 +1764,18 @@ inline SolverResult solve_launch_angles(
                     auxDtheta, auxDphi,
                     relPos0, relVel, relAcc, v0, kDrag, residualP,
                     out.report);
-                acceptedGlobal = apply_accepted_step_and_update_jacobian(
+                acceptedGlobal = accept_step(
                     theta, phi, F, miss, relMissAtStar, tStar,
                     J, lambda, residualP,
                     auxStep, missOld,
                     out.report);
-                if (acceptedGlobal && std::isfinite(miss) && (!std::isfinite(missBestAll) || (miss < missBestAll)))
+                if (acceptedGlobal && std::isfinite(miss) && (!std::isfinite(bestMiss) || (miss < bestMiss)))
                 {
-                    thetaBestAll = theta;
-                    phiBestAll = phi;
-                    missBestAll = miss;
-                    relBestAll = relMissAtStar;
-                    tBestAll = tStar;
+                    bestTheta = theta;
+                    bestPhi = phi;
+                    bestMiss = miss;
+                    bestRelMiss = relMissAtStar;
+                    bestTime = tStar;
                 }
             }
 
@@ -1836,22 +1788,20 @@ inline SolverResult solve_launch_angles(
         }
     }
 
-    if (!std::isfinite(missBestAll) || missBestAll > P.tolMiss)
+    if (!std::isfinite(bestMiss) || bestMiss > P.tolMiss)
     {
-        BallisticParams directP = P;
-        directP.beta = P.beta;
-        solve_direct_fallback(
-            thetaBestAll, phiBestAll, missBestAll, relBestAll, tBestAll,
-            relPos0, relVel, relAcc, v0, kDrag, directP,
+        solve_auxiliary_multistart(
+            bestTheta, bestPhi, bestMiss, bestRelMiss, bestTime,
+            relPos0, relVel, relAcc, v0, kDrag, residualP,
             out.report);
     }
 
     // Return final (best-so-far) result
-    out.theta = thetaBestAll;
-    out.phi = phiBestAll;
-    out.miss = missBestAll;
-    out.relMissAtStar = relBestAll;
-    out.tStar = tBestAll;
+    out.theta = bestTheta;
+    out.phi = bestPhi;
+    out.miss = bestMiss;
+    out.relMissAtStar = bestRelMiss;
+    out.tStar = bestTime;
 
     // Success check
     out.success = (std::isfinite(out.miss) && (out.miss <= P.tolMiss));
