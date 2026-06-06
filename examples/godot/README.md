@@ -74,11 +74,18 @@ Then open this folder as a Godot project.
 
 ## Smoke test
 
-After building, run the demo scene from the command line:
+After building, the first run must import the project so Godot registers the
+GDExtension; then run the main scene headless (`--quit-after` counts frames):
 
 ```bash
-godot --path . res://demo/intercept_demo.tscn --quit-after 5
+godot --headless --editor --path . --quit       # one-time import (registers the extension)
+godot --headless --path . --quit-after 250       # run the main scene
 ```
+
+Verified with Godot 4.2.2 (headless): the extension loads, `BallisticTracker`
+and `BallisticSolver` resolve, and the scene runs without script/extension
+errors (headless emits harmless dummy-renderer "Parameter m is null" mesh
+warnings). For the visuals, open the folder in the Godot editor and press Play.
 
 The intercept scene tracks a moving target from noisy measurements and fires a burst;
 expect red radar dots around the target, a yellow predicted-intercept marker,
