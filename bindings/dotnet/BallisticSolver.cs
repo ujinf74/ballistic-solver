@@ -309,7 +309,7 @@ public static class Ballistic
         public double v0;
         public double kDrag;
         public int arcMode;
-        public int _pad0;
+        public int preset; // 0=Fast, 1=Balanced, 2=Precise (set by ballistic_inputs_init)
         public double g;
         public fixed double wind[3];
         public double dt;

@@ -49,7 +49,7 @@ target_compile_definitions(ballistic_solver PRIVATE
 )
 
 target_compile_definitions(ballistic_solver PUBLIC
-    BALLISTIC_SOLVER_ABI_VERSION=3
+    BALLISTIC_SOLVER_ABI_VERSION=4
     BALLISTIC_SOLVER_VERSION_STRING="${PROJECT_VERSION}"
 )
 

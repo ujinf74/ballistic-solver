@@ -74,11 +74,19 @@ int main(void)
     }
 
     {
-        BallisticInputs precise;
-        ballistic_inputs_init(&precise);
+        BallisticInputs precise = in;
         assert(ballistic_inputs_apply_preset(&precise, 2) == 0);
         assert(precise.tolMiss < in.tolMiss);
         assert(precise.maxIter > in.maxIter);
+        assert(precise.preset == 2); /* preset must be recorded so solve re-expands full tuning */
+
+        /* Solve with the precise preset: deep tuning (line-search/lambda/FD/golden)
+           now flows through ballistic_solve, so the tighter tolerance is reachable. */
+        BallisticOutputs preciseOut;
+        memset(&preciseOut, 0, sizeof(preciseOut));
+        assert(ballistic_solve(&precise, &preciseOut) == 0);
+        assert(preciseOut.success != 0);
+        assert(preciseOut.miss <= precise.tolMiss);
     }
 
     {

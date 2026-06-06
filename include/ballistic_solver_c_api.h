@@ -19,7 +19,7 @@ extern "C" {
 #endif
 
 #ifndef BALLISTIC_SOLVER_ABI_VERSION
-    #define BALLISTIC_SOLVER_ABI_VERSION 3u
+    #define BALLISTIC_SOLVER_ABI_VERSION 4u
 #endif
 
 #ifndef BALLISTIC_SOLVER_VERSION_STRING
@@ -37,7 +37,7 @@ typedef struct BallisticInputs
     double kDrag;
 
     int32_t arcMode; // 0=Low, 1=High
-    int32_t _pad0;
+    int32_t preset;  // 0=Fast, 1=Balanced, 2=Precise; carries full solver tuning into ballistic_solve
     double g;
     double wind[3];
     double dt;
@@ -75,9 +75,9 @@ typedef struct BallisticOutputs
     char message[256];
 } BallisticOutputs;
 
-BALLISTIC_SOLVER_C_API void ballistic_inputs_init(BallisticInputs* in);
+BALLISTIC_SOLVER_C_API void BALLISTIC_SOLVER_CALL ballistic_inputs_init(BallisticInputs* in);
 
-BALLISTIC_SOLVER_C_API void ballistic_accel_inputs_init(BallisticAccelInputs* in);
+BALLISTIC_SOLVER_C_API void BALLISTIC_SOLVER_CALL ballistic_accel_inputs_init(BallisticAccelInputs* in);
 
 BALLISTIC_SOLVER_C_API int32_t BALLISTIC_SOLVER_CALL ballistic_inputs_apply_preset(
     BallisticInputs* in,
@@ -102,7 +102,7 @@ BALLISTIC_SOLVER_C_API int32_t BALLISTIC_SOLVER_CALL ballistic_make_relative_mot
    0  = API call completed and out was filled.
    <0 = API-level failure, such as invalid pointers or an internal exception.
    Numerical solve success is reported by out->success and out->status. */
-BALLISTIC_SOLVER_C_API int32_t ballistic_solve(const BallisticInputs* in, BallisticOutputs* out);
+BALLISTIC_SOLVER_C_API int32_t BALLISTIC_SOLVER_CALL ballistic_solve(const BallisticInputs* in, BallisticOutputs* out);
 
 BALLISTIC_SOLVER_C_API int32_t BALLISTIC_SOLVER_CALL ballistic_solve_accel(
     const BallisticAccelInputs* in,

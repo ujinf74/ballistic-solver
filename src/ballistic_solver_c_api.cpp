@@ -39,7 +39,10 @@ static inline void apply_params_to_inputs(const BallisticParams& P, BallisticInp
 
 static inline BallisticParams params_from_inputs(const BallisticInputs* in)
 {
-    BallisticParams P;
+    // Start from the selected preset so solver tuning that is not exposed as a
+    // struct field (line-search/lambda tries, finite-difference, golden-section)
+    // is honored, then override the basic fields the caller can set explicitly.
+    BallisticParams P = make_params_preset(preset_from_int(in->preset));
 
     P.arcMode = (in->arcMode == 1) ? ArcMode::High : ArcMode::Low;
 
@@ -85,6 +88,7 @@ void ballistic_inputs_init(BallisticInputs* in)
 
     std::memset(in, 0, sizeof(*in));
     in->arcMode = 0;
+    in->preset  = 1; // Balanced (memset would leave 0 = Fast)
     in->g       = 9.80665;
     in->dt      = 0.01;
     in->tMax    = 40.0;
@@ -119,6 +123,7 @@ int32_t ballistic_inputs_apply_preset(BallisticInputs* in, int32_t preset)
 
     apply_params_to_inputs(P, in);
     in->arcMode = arcMode;
+    in->preset = preset; // so ballistic_solve re-expands the full preset tuning
     return 0;
 }
 
