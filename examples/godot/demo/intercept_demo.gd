@@ -10,12 +10,14 @@ extends Node3D
 
 const TARGET_START := Vector3(360.0, 30.0, 50.0)
 const TARGET_VEL := Vector3(-95.0, 0.0, -14.0)
-const WEAVE_AMP := 8.0         # lateral (Z) maneuver amplitude, m
+# Default is a clean straight inbound (a strong showcase). Raise WEAVE_AMP to see
+# the second-order-prediction limit degrade hit rate against a maneuvering target.
+const WEAVE_AMP := 0.0         # lateral (Z) maneuver amplitude, m
 const WEAVE_OMEGA := 1.6       # maneuver angular rate, rad/s
 const MUZZLE_SPEED := 400.0
 const K_DRAG := 0.006
 const MEAS_NOISE := 1.0        # position measurement noise std, m
-const PROCESS_NOISE := 4.0     # tracker jerk spectral density
+const PROCESS_NOISE := 3.0     # tracker jerk spectral density
 const FIRE_INTERVAL := 0.16
 const FIRE_RANGE := 300.0
 const MIN_RANGE := 50.0
