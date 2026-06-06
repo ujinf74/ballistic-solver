@@ -24,6 +24,11 @@ All notable changes to this project are documented here. Versions follow
   constant-velocity, accelerating, and coordinated-turn tracks
   (`benchmarks/predictor_eval.py`).
 
+- Examples: the Godot GDExtension exposes a `BallisticTracker` class (wrapping
+  the C++ `TargetTracker` directly), and a new `demo/ciws_demo.tscn` showcase
+  tracks a weaving target from noisy radar and fires a scored burst. Python
+  `examples/viz/ciws_viz.py` renders miss-vs-range curves and an engagement GIF.
+
 ### Changed
 
 - Refactor: split `ballistic_solver_core.hpp` into focused headers under

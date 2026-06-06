@@ -15,11 +15,27 @@ examples/godot/
   project.godot
   addons/ballistic_solver/ballistic_solver.gdextension
   addons/ballistic_solver/plugin.cfg
-  demo/ballistic_demo.gd
+  demo/ballistic_demo.gd     # perfect-info lead-fire demo
+  demo/ciws_demo.gd          # CIWS-style noisy-radar tracker demo (default scene)
   src/ballistic_solver_gd.h
   src/ballistic_solver_gd.cpp
   SConstruct
 ```
+
+## Classes
+
+* `BallisticSolver` — `solve(...)` and `simulate_from_angles(...)` over the C ABI.
+* `BallisticTracker` — a position-only constant-acceleration tracker wrapping the
+  C++ core directly (`TargetTracker` from `bs/kalman.hpp`): `configure(process,
+  meas)`, `update(t, rel_pos)`, `predict(tau)`, `estimated_position/velocity/
+  acceleration()`, and `solve(v0, k_drag, arc_mode)` for lead-fire via the
+  predictor seam. Adding it changed the extension source, so **rebuild the
+  GDExtension** (see below) before the CIWS demo will run.
+
+The CIWS demo (`demo/ciws_demo.tscn`, the default main scene) feeds the tracker
+NOISY radar measurements of a weaving target and fires a continuous burst from
+the tracker's lead solution; rounds are scored against the true target, so green
+hit markers reflect real intercepts and the HUD shows the running hit rate.
 
 ## Build outline
 
@@ -59,13 +75,16 @@ Then open this folder as a Godot project.
 After building, run the demo scene from the command line:
 
 ```bash
-godot --path . res://demo/ballistic_demo.tscn --quit-after 3
+godot --path . res://demo/ciws_demo.tscn --quit-after 5
 ```
 
-The scene instantiates `BallisticSolver`, calls `solve`, draws the sampled drag
-trajectory, and prints the returned dictionary to the Godot output log. A valid
-run should include `"success": true` and a visible cyan trajectory, yellow lead
-line, red target, green intercept marker, and blue projectile.
+The CIWS scene tracks a weaving target from noisy measurements and fires a burst;
+expect red radar dots around the target, a yellow predicted-intercept marker,
+grey rounds in flight, and green hit markers with a hit-rate HUD. The simpler
+`res://demo/ballistic_demo.tscn` instantiates `BallisticSolver`, calls `solve`,
+draws the sampled drag trajectory, and prints the returned dictionary; a valid
+run shows `"success": true` and a cyan trajectory, yellow lead line, red target,
+green intercept marker, and blue projectile.
 
 The wrapper returns a `Dictionary` with `success`, `status`, `theta`, `phi`,
 `miss`, `t_star`, `iterations`, `accepted_steps`, `last_lambda`, `last_alpha`,
