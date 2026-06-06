@@ -138,6 +138,22 @@ fixed point — exact for constant-velocity / constant-acceleration predictors a
 second-order accurate at the intercept for smoothly curving tracks. Returns the
 same dict as `solve`.
 
+### `TargetTracker`
+
+```python
+tracker = bs.TargetTracker(processNoise=1.0, measNoise=0.25)
+for t, pos in measurements:        # (timestamp, relative position)
+    tracker.update(t, pos)
+lead = tracker.predict(1.5)        # predicted relative position 1.5 s ahead
+result = tracker.solve(v0=95.0, kDrag=0.0015)   # lead-fire via the predictor seam
+```
+
+A position-only constant-acceleration Kalman tracker (per-axis, white-noise-jerk
+model). It denoises the track and recovers velocity/acceleration without
+finite-difference noise, then feeds the predictor seam — so callers never supply
+`relVel`/`relAcc`. See `benchmarks/predictor_eval.py` for a lead-prediction
+accuracy comparison against a constant-velocity baseline.
+
 ### Utilities
 
 ```python

@@ -1,6 +1,7 @@
 from ._core import (
     ArcMode,
     BallisticParams,
+    TargetTracker,
     closest_approach_accel,
     k_drag_from_physical,
     params_preset,
@@ -62,6 +63,7 @@ class Environment:
 __all__ = [
     "ArcMode",
     "BallisticParams",
+    "TargetTracker",
     "Environment",
     "Projectile",
     "Solver",

@@ -12,3 +12,4 @@
 #include "bs/lm.hpp"
 #include "bs/solve.hpp"
 #include "bs/predictor.hpp"
+#include "bs/kalman.hpp"

@@ -276,6 +276,47 @@ PYBIND11_MODULE(_core, m)
         py::arg("arcMode") = py::none(),
         py::arg("params") = py::none());
 
+    py::class_<TargetTracker>(m, "TargetTracker")
+        .def(py::init<double, double>(), py::arg("processNoise") = 1.0, py::arg("measNoise") = 1.0)
+        .def(
+            "update",
+            [](TargetTracker& self, double t, py::sequence pos)
+            {
+                self.update(t, to_vec3(pos));
+            },
+            py::arg("t"),
+            py::arg("pos"))
+        .def(
+            "predict",
+            [](const TargetTracker& self, double tau) -> py::list
+            {
+                return vec3_to_list(self.predict(tau));
+            },
+            py::arg("tau"))
+        .def_property_readonly("position", [](const TargetTracker& self) { return vec3_to_list(self.position()); })
+        .def_property_readonly("velocity", [](const TargetTracker& self) { return vec3_to_list(self.velocity()); })
+        .def_property_readonly("acceleration", [](const TargetTracker& self) { return vec3_to_list(self.acceleration()); })
+        .def(
+            "solve",
+            [](const TargetTracker& self, double v0, double kDrag, py::object arcMode, py::object paramsObj) -> py::dict
+            {
+                BallisticParams P{};
+                if (!paramsObj.is_none())
+                {
+                    P = py::cast<BallisticParams>(paramsObj);
+                }
+                if (!arcMode.is_none())
+                {
+                    const int am = normalize_arc_mode(arcMode);
+                    P.arcMode = (am == 1) ? ArcMode::High : ArcMode::Low;
+                }
+                return result_to_dict(solve_launch_angles_predicted(self.predictor(), v0, kDrag, P));
+            },
+            py::arg("v0"),
+            py::arg("kDrag"),
+            py::arg("arcMode") = py::none(),
+            py::arg("params") = py::none());
+
     m.def(
         "rk4_step",
         [](py::sequence r,

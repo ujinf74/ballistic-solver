@@ -15,6 +15,14 @@ All notable changes to this project are documented here. Versions follow
   fixed point: exact for constant-velocity / constant-acceleration predictors and
   second-order accurate at the intercept for smoothly curving tracks. The core
   solver is unchanged.
+- `TargetTracker` (C++ `include/bs/kalman.hpp`, Python `bs.TargetTracker`): a
+  position-only constant-acceleration Kalman tracker (per-axis, white-noise-jerk
+  model). Ingests `(timestamp, relative position)` and exposes `predict(tau)` and
+  a one-call `solve(v0, kDrag, ...)` via the predictor seam, so callers need not
+  supply `relVel`/`relAcc`. On a 0.5 m-noise, 20 Hz feed it reduces 1 s lead-
+  prediction RMS by ~4-8x versus a two-point constant-velocity baseline on
+  constant-velocity, accelerating, and coordinated-turn tracks
+  (`benchmarks/predictor_eval.py`).
 
 ### Changed
 

@@ -157,6 +157,38 @@ def test_predictor_seam_matches_linear_and_accel():
     assert rp3["miss"] <= 1e-2
 
 
+def test_tracker_recovers_state_and_solves():
+    p0 = (150.0, 30.0, 6.0)
+    v = (7.0, -3.0, 0.5)
+    a = (0.5, 0.4, -0.1)
+
+    def ca(t):
+        return (
+            p0[0] + v[0] * t + 0.5 * a[0] * t * t,
+            p0[1] + v[1] * t + 0.5 * a[1] * t * t,
+            p0[2] + v[2] * t + 0.5 * a[2] * t * t,
+        )
+
+    tracker = bs.TargetTracker(processNoise=1.0, measNoise=1e-4)
+    dt = 0.05
+    n = 200
+    for k in range(n):
+        tracker.update(k * dt, ca(k * dt))
+
+    # The constant-acceleration state is recovered from position-only input.
+    acc = tracker.acceleration
+    assert all(abs(acc[i] - a[i]) < 1e-3 for i in range(3))
+
+    # Lead prediction matches ground truth for a CA track.
+    t_now = (n - 1) * dt
+    tau = 1.5
+    assert math.dist(tracker.predict(tau), ca(t_now + tau)) < 1e-2
+
+    # Solving directly against the live track succeeds.
+    res = tracker.solve(95.0, 0.0015)
+    assert res["success"]
+
+
 if __name__ == "__main__":
     test_vacuum_stationary_matches_analytic_solution()
     test_vacuum_moving_target_constructed_hit()
@@ -164,4 +196,5 @@ if __name__ == "__main__":
     test_random_linear_cases()
     test_acceleration_api_smoke()
     test_predictor_seam_matches_linear_and_accel()
+    test_tracker_recovers_state_and_solves()
     print("random_regression.py: ok")
