@@ -64,6 +64,8 @@ def run(preset, count):
         f"p95_miss={percentile(misses, 0.95):.3e}"
     )
 
+    assert successes >= round(count * 0.98), f"{preset} success regressed: {successes}/{count}"
+
 
 if __name__ == "__main__":
     for name in ("fast", "balanced", "precise"):

@@ -7,15 +7,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(pybind11 CONFIG REQUIRED)
 
-#set(BS_VERSION "${SKBUILD_PROJECT_VERSION}")
-
-#add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../.. ${CMAKE_BINARY_DIR}/bs_root)
-
+# The pybind module is header-only against ballistic_solver_core.hpp, so it does
+# not link the C ABI shared library.
 pybind11_add_module(_core MODULE
     pybind_module.cpp
 )
-
-#target_link_libraries(_core PRIVATE ballistic_solver)
 
 target_include_directories(_core PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/../../include

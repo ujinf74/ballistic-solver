@@ -85,7 +85,7 @@ This project instead **simulates the projectile** and **solves the intercept num
 * Wind vector supported (since v0.3)
 * Extended C ABI utilities (since v0.4)
 * Quartic vacuum-lead initialization for moving targets (since v0.6)
-* High-arc moving-target convergence fallback (since v0.6.1)
+* High-arc moving-target auxiliary multi-start fallback (since v0.6.1)
 * Fast / balanced / precise solver presets
 * Physical drag helper: `kDrag = 0.5 * rho * Cd * area / mass`
 * Robust in strongly nonlinear regimes (no analytic assumptions)
@@ -102,15 +102,16 @@ This project instead **simulates the projectile** and **solves the intercept num
 ### `solve(...)`
 
 ```python
-solve(relPos0, relVel, v0, kDrag, arcMode=0, params=None) -> dict
+solve(relPos0, relVel, v0, kDrag, arcMode=None, params=None, relAcc=None) -> dict
 ```
 
 * `relPos0`: target relative position at t=0 (x,y,z)
 * `relVel`: target relative velocity (x,y,z)
 * `v0`: muzzle speed (scalar)
 * `kDrag`: quadratic drag coefficient
-* `arcMode`: `0/1` or `"low"/"high"` (case-insensitive)
+* `arcMode`: `0/1` or `"low"/"high"` (case-insensitive); `None` keeps the `params` value
 * `params`: optional `BallisticParams` for advanced tuning (gravity, wind, integrator and solver knobs)
+* `relAcc`: optional constant target relative acceleration (x,y,z); same as `solve_accel`
 
 Returned dict keys include:
 
@@ -181,6 +182,10 @@ Return value policy:
 * Numerical solve success is reported separately by `out->success` and `out->status`.
 * ABI v3 adds convergence diagnostics to `BallisticOutputs`: `iterations`,
   `acceptedSteps`, `lastLambda`, and `lastAlpha`.
+* ABI v4 adds a `preset` field to `BallisticInputs` (0=Fast, 1=Balanced,
+  2=Precise). `ballistic_inputs_apply_preset` records it so that the full preset
+  tuning (line-search, lambda tries, finite-difference step, golden-section)
+  is carried into `ballistic_solve`, not only `dt`/`tMax`/`tolMiss`/`maxIter`.
 
 Callers should check both:
 
@@ -299,7 +304,7 @@ This works directly inside Unity.
 5. Apply a one-shot fixed-point correction before the main iteration.
 6. Solve the nonlinear system using damped least squares (Levenberg–Marquardt).
 7. Accelerate Jacobian updates with Broyden-style refinement.
-8. If the auxiliary-residual path stalls, retry from direct-residual fallback seeds.
+8. If the main solve stalls, retry the same auxiliary residual from additional time-based seeds.
 9. Return the best solution found.
 
 Failure cases are explicitly detected and reported.
