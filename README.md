@@ -124,6 +124,20 @@ Returned dict keys include:
 * `message` (short diagnostic string)
 * plus convergence diagnostics (`iterations`, `acceptedSteps`, `lastLambda`, `lastAlpha`)
 
+### `solve_predicted(...)`
+
+```python
+solve_predicted(predictor, v0, kDrag, arcMode=None, params=None) -> dict
+```
+
+Lead-fire against a position-only trajectory predictor instead of explicit
+`relVel`/`relAcc`. `predictor(t)` returns the predicted relative position `(x, y, z)`
+at time `t >= 0` (e.g. from a Kalman/IMM track). Internally a local
+constant-acceleration model is fitted at the intercept time and iterated to a
+fixed point — exact for constant-velocity / constant-acceleration predictors and
+second-order accurate at the intercept for smoothly curving tracks. Returns the
+same dict as `solve`.
+
 ### Utilities
 
 ```python

@@ -244,6 +244,39 @@ PYBIND11_MODULE(_core, m)
         py::arg("params") = py::none());
 
     m.def(
+        "solve_predicted",
+        [](py::function predictor,
+           double v0,
+           double kDrag,
+           py::object arcMode,
+           py::object paramsObj) -> py::dict
+        {
+            BallisticParams P{};
+            if (!paramsObj.is_none())
+            {
+                P = py::cast<BallisticParams>(paramsObj);
+            }
+            if (!arcMode.is_none())
+            {
+                const int am = normalize_arc_mode(arcMode);
+                P.arcMode = (am == 1) ? ArcMode::High : ArcMode::Low;
+            }
+
+            TargetPredictor target;
+            target.pos = [predictor](double t) -> Vec3
+            {
+                return to_vec3(py::cast<py::sequence>(predictor(t)));
+            };
+
+            return result_to_dict(solve_launch_angles_predicted(target, v0, kDrag, P));
+        },
+        py::arg("predictor"),
+        py::arg("v0"),
+        py::arg("kDrag"),
+        py::arg("arcMode") = py::none(),
+        py::arg("params") = py::none());
+
+    m.def(
         "rk4_step",
         [](py::sequence r,
            py::sequence v,

@@ -123,10 +123,45 @@ def test_acceleration_api_smoke():
     assert math.isfinite(result["miss"])
 
 
+def test_predictor_seam_matches_linear_and_accel():
+    p0 = (140.0, 40.0, 8.0)
+    v = (6.0, -4.0, 1.0)
+    a = (0.3, 0.2, -0.1)
+    v0 = 95.0
+    k_drag = 0.0015
+
+    # A constant-velocity predictor must match solve() (which assumes relVel).
+    pred_cv = lambda t: (p0[0] + v[0] * t, p0[1] + v[1] * t, p0[2] + v[2] * t)
+    rp = bs.solve_predicted(pred_cv, v0, k_drag)
+    rs = bs.solve(p0, v, v0, k_drag)
+    assert rp["success"] and rs["success"]
+    assert abs(rp["theta"] - rs["theta"]) < 1e-5
+    assert abs(rp["phi"] - rs["phi"]) < 1e-5
+
+    # A constant-acceleration predictor must match solve_accel().
+    pred_ca = lambda t: (
+        p0[0] + v[0] * t + 0.5 * a[0] * t * t,
+        p0[1] + v[1] * t + 0.5 * a[1] * t * t,
+        p0[2] + v[2] * t + 0.5 * a[2] * t * t,
+    )
+    rp2 = bs.solve_predicted(pred_ca, v0, k_drag)
+    ra = bs.solve_accel(p0, v, a, v0, k_drag)
+    assert rp2["success"] and ra["success"]
+    assert abs(rp2["theta"] - ra["theta"]) < 1e-6
+    assert abs(rp2["phi"] - ra["phi"]) < 1e-6
+
+    # A genuinely curved predictor must still converge and hit.
+    pred_curved = lambda t: (p0[0] + v[0] * t, p0[1] + v[1] * t + 12.0 * math.sin(0.6 * t), p0[2] + v[2] * t)
+    rp3 = bs.solve_predicted(pred_curved, v0, k_drag)
+    assert rp3["success"]
+    assert rp3["miss"] <= 1e-2
+
+
 if __name__ == "__main__":
     test_vacuum_stationary_matches_analytic_solution()
     test_vacuum_moving_target_constructed_hit()
     test_unreachable_vacuum_target_and_failure_status_examples()
     test_random_linear_cases()
     test_acceleration_api_smoke()
+    test_predictor_seam_matches_linear_and_accel()
     print("random_regression.py: ok")

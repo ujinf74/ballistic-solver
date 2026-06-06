@@ -11,3 +11,4 @@
 #include "bs/residual.hpp"
 #include "bs/lm.hpp"
 #include "bs/solve.hpp"
+#include "bs/predictor.hpp"

@@ -3,6 +3,26 @@
 All notable changes to this project are documented here. Versions follow
 `vMAJOR.MINOR.PATCH` git tags; the build derives its version from the tag.
 
+## Unreleased
+
+### Added
+
+- Target predictor seam: `solve_launch_angles_predicted(TargetPredictor, ...)`
+  (C++, `include/bs/predictor.hpp`) and `solve_predicted(predictor, v0, kDrag, ...)`
+  (Python) accept a position-only trajectory predictor `f(t)` instead of explicit
+  `relVel`/`relAcc`. Implemented additively over the existing solver by fitting a
+  local constant-acceleration model at the intercept time and iterating it to a
+  fixed point: exact for constant-velocity / constant-acceleration predictors and
+  second-order accurate at the intercept for smoothly curving tracks. The core
+  solver is unchanged.
+
+### Changed
+
+- Refactor: split `ballistic_solver_core.hpp` into focused headers under
+  `include/bs/` (vec3, math_utils, params, integrator, target, closest_approach,
+  vacuum_lead, residual, lm, solve, predictor). Behavior-preserving; the umbrella
+  header keeps the existing include surface.
+
 ## 0.7.0
 
 ### Breaking (C ABI v4)
