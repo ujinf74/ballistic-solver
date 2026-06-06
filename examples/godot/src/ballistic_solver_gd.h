@@ -8,6 +8,7 @@
 #include <godot_cpp/variant/vector3.hpp>
 
 #include "ballistic_solver_core.hpp"
+#include "bs/kalman.hpp"
 
 using namespace godot;
 

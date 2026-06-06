@@ -12,4 +12,6 @@
 #include "bs/lm.hpp"
 #include "bs/solve.hpp"
 #include "bs/predictor.hpp"
-#include "bs/kalman.hpp"
+// Note: bs/kalman.hpp (TargetTracker, a position-only estimator) is intentionally
+// NOT included here. It is an optional add-on, not part of the core solver; include
+// it explicitly with `#include "bs/kalman.hpp"` when you want the tracker.

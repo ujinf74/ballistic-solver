@@ -4,6 +4,7 @@
 #include <pybind11/pybind11.h>
 
 #include "ballistic_solver_core.hpp"
+#include "bs/kalman.hpp"
 
 namespace py = pybind11;
 
