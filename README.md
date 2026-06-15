@@ -489,6 +489,10 @@ cases with seed `20260503`. The last row is the high-arc moving-target stress ca
 | High arc, stationary target | 10000/10000 (100.00%) | 0.785 ms | 1.604 ms | 8.018e-03 m |
 | High arc, moving target | 10000/10000 (100.00%) | 1.126 ms | 2.350 ms | 8.341e-03 m |
 
+For a difficulty-bucketed breakdown (low / high arc × drag strength, with P99 and
+the hard-corner tail) and the full methodology, see
+[docs/benchmarks.md](docs/benchmarks.md).
+
 ---
 
 ## ABI notes
