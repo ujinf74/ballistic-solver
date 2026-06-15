@@ -528,9 +528,9 @@ measured on Windows NT 10.0.26200.0, AMD Ryzen 9 6900HS, Python 3.12.8, MSVC
 Reference preset result from the same local Release build:
 
 ```text
-fast:     500/500, median 0.054 ms, p95 0.237 ms, p95 miss 2.810e-02 m
-balanced: 500/500, median 0.115 ms, p95 0.492 ms, p95 miss 7.053e-03 m
-precise:  500/500, median 0.168 ms, p95 0.669 ms, p95 miss 5.596e-06 m
+fast:     500/500, median 0.031 ms, p95 0.131 ms, p95 miss 2.810e-02 m
+balanced: 500/500, median 0.057 ms, p95 0.261 ms, p95 miss 7.053e-03 m
+precise:  500/500, median 0.087 ms, p95 0.356 ms, p95 miss 5.596e-06 m
 ```
 
 Current default solver (coordinate-residual core) results from 10,000 generated
@@ -538,9 +538,9 @@ cases with seed `20260503`. The last row is the high-arc moving-target stress ca
 
 | Case set | Success | Median runtime | P95 runtime | P95 miss |
 |---|---:|---:|---:|---:|
-| Low arc, moving target | 10000/10000 (100.00%) | 0.168 ms | 0.510 ms | 6.450e-03 m |
-| High arc, stationary target | 10000/10000 (100.00%) | 0.785 ms | 1.604 ms | 8.018e-03 m |
-| High arc, moving target | 10000/10000 (100.00%) | 1.126 ms | 2.350 ms | 8.341e-03 m |
+| Low arc, moving target | 10000/10000 (100.00%) | 0.089 ms | 0.266 ms | 6.450e-03 m |
+| High arc, stationary target | 10000/10000 (100.00%) | 0.408 ms | 0.846 ms | 8.018e-03 m |
+| High arc, moving target | 10000/10000 (100.00%) | 0.607 ms | 1.264 ms | 8.341e-03 m |
 
 For a difficulty-bucketed breakdown (low / high arc × drag strength, with P99 and
 the hard-corner tail) and the full methodology, see
