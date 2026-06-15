@@ -5,7 +5,9 @@
 [![PyPI](https://img.shields.io/pypi/v/ballistic-solver)](https://pypi.org/project/ballistic-solver/)
 [![License](https://img.shields.io/github/license/ujinf74/ballistic-solver)](https://github.com/ujinf74/ballistic-solver/blob/main/LICENSE)
 
-**ballistic-solver** is a native C/C++ numerical solver that computes the launch angles to hit **moving targets** under **gravity** and **quadratic air drag**, with optional **wind**. Unlike vacuum / closed-form solvers, it **simulates the projectile** and **solves the intercept numerically**, so it stays accurate even when trajectories are strongly curved. Ships as a header-only C++ core with a stable C ABI and Python (`pip install ballistic-solver`), C#/Unity, and Godot bindings.
+**ballistic-solver** computes the launch angles to hit **moving targets** under **gravity**, **quadratic air drag**, and optional **wind** — for games, simulation, robotics, and targeting.
+
+Unlike vacuum / closed-form solvers, it **simulates the projectile and solves the intercept numerically**, so it stays accurate on strongly curved trajectories. Header-only C++ core with a stable C ABI and Python (`pip install ballistic-solver`), C#/Unity, and Godot bindings.
 
 https://github.com/user-attachments/assets/7de04137-61d9-4cf0-be5e-9804d6a9c67b
 
@@ -71,8 +73,25 @@ https://github.com/user-attachments/assets/c0c69cdd-0dd4-4606-9c7d-f21dd002d7f7
 
 ## Why this solver
 
-Many launch-angle solvers depend on vacuum assumptions or partially linearized models.
-This project instead **simulates the projectile** and **solves the intercept numerically**, targeting robustness in real-time simulations and integration scenarios.
+Many launch-angle solvers either assume a vacuum (no drag) or linearize the
+dynamics. Each common approach trades away something:
+
+| Approach | Moving target | Drag | Wind | No per-shot tuning | Real-time speed | Robust |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|
+| Vacuum / closed-form | ○ | ✗ | ✗ | ◎ | ◎ | ○ |
+| Brute-force angle grid | ◎ | ◎ | ◎ | ○ | ✗ | ◎ |
+| Generic optimizer (e.g. least-squares) | ◎ | ◎ | ◎ | △ | △ | ○ |
+| **ballistic-solver** | ◎ | ◎ | ◎ | ◎ | ◎ | ◎ |
+
+◎ strong · ○ workable · △ limited · ✗ not supported
+
+Vacuum solvers are the fastest but ignore drag and wind. Brute-force grids
+handle everything but are too slow for real-time use. Generic optimizers work on
+the same residual but need a good initial guess and per-problem tuning, and are
+more prone to local minima. `ballistic-solver` is purpose-built for the
+moving-target + drag + real-time corner: a closed-form vacuum warm start, an
+analytic Jacobian preconditioner, and a multistart fallback for the hard cases.
+See [docs/numerical_method.md](docs/numerical_method.md) for the full method.
 
 ---
 
@@ -363,7 +382,10 @@ This works directly inside Unity.
 (re-aim through the vacuum inverse, with damped least squares) remains available
 as `solve_aux` for compatibility and reproducibility.
 
-Failure cases are explicitly detected and reported.
+Failure cases are explicitly detected and reported. See
+[docs/numerical_method.md](docs/numerical_method.md) for a step-by-step
+description and [docs/limitations.md](docs/limitations.md) for the modelling
+assumptions.
 
 ---
 
@@ -380,6 +402,22 @@ Common causes include:
 
 Use `success`, `status`, `message`, and `miss` together when deciding whether to
 accept a solution.
+
+---
+
+## Limitations
+
+`ballistic-solver` is a point-mass solver with a deliberately scoped physics model:
+
+* point mass — no spin drift / Magnus effect
+* quadratic drag with a single coefficient — no Mach-dependent drag table
+* constant gravity and uniform, constant wind
+* solves launch angles only (muzzle speed and arc branch are inputs)
+* no terrain / obstacle collision
+* best-effort (not guaranteed) on unreachable or near-limit targets
+* a numerical library for games, simulation, robotics, and research — **not** a certified fire-control system
+
+See [docs/limitations.md](docs/limitations.md) for the full list and the reasoning behind each.
 
 ---
 
