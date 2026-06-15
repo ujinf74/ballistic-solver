@@ -5,6 +5,7 @@
 
 #include "ballistic_solver_core.hpp"
 #include "bs/kalman.hpp"
+#include "bs/solve_coord_lead.hpp"
 
 namespace py = pybind11;
 
@@ -201,7 +202,7 @@ PYBIND11_MODULE(_core, m)
                 ra = to_vec3(py::cast<py::sequence>(relAccObj));
             }
 
-            return result_to_dict(solve_launch_angles(r0, rv, v0, kDrag, P, ra));
+            return result_to_dict(solve_launch_angles_coord_lead(r0, rv, v0, kDrag, P, ra));
         },
         py::arg("relPos0"),
         py::arg("relVel"),
@@ -234,7 +235,7 @@ PYBIND11_MODULE(_core, m)
                 P.arcMode = (am == 1) ? ArcMode::High : ArcMode::Low;
             }
 
-            return result_to_dict(solve_launch_angles(to_vec3(relPos0), to_vec3(relVel), v0, kDrag, P, to_vec3(relAcc)));
+            return result_to_dict(solve_launch_angles_coord_lead(to_vec3(relPos0), to_vec3(relVel), v0, kDrag, P, to_vec3(relAcc)));
         },
         py::arg("relPos0"),
         py::arg("relVel"),
@@ -243,6 +244,44 @@ PYBIND11_MODULE(_core, m)
         py::arg("kDrag"),
         py::arg("arcMode") = py::none(),
         py::arg("params") = py::none());
+
+    // Auxiliary-residual solver (the prior default). Kept for compatibility and
+    // for reproducing the auxiliary-residual method; `solve` now uses the
+    // coordinate-residual core.
+    m.def(
+        "solve_aux",
+        [](py::sequence relPos0,
+           py::sequence relVel,
+           double v0,
+           double kDrag,
+           py::object arcMode,
+           py::object paramsObj,
+           py::object relAccObj) -> py::dict
+        {
+            BallisticParams P{};
+            if (!paramsObj.is_none())
+            {
+                P = py::cast<BallisticParams>(paramsObj);
+            }
+            if (!arcMode.is_none())
+            {
+                const int am = normalize_arc_mode(arcMode);
+                P.arcMode = (am == 1) ? ArcMode::High : ArcMode::Low;
+            }
+            Vec3 ra = { 0.0, 0.0, 0.0 };
+            if (!relAccObj.is_none())
+            {
+                ra = to_vec3(py::cast<py::sequence>(relAccObj));
+            }
+            return result_to_dict(solve_launch_angles(to_vec3(relPos0), to_vec3(relVel), v0, kDrag, P, ra));
+        },
+        py::arg("relPos0"),
+        py::arg("relVel"),
+        py::arg("v0"),
+        py::arg("kDrag"),
+        py::arg("arcMode") = py::none(),
+        py::arg("params") = py::none(),
+        py::arg("relAcc") = py::none());
 
     m.def(
         "solve_predicted",

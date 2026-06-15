@@ -8,23 +8,23 @@ extends Node3D
 # deterrence, games/sim, and defense -- it only sees relative kinematics.
 # Units are metres; the launcher sits at the origin, +Y is up.
 
-const TARGET_START := Vector3(360.0, 30.0, 50.0)
-const TARGET_VEL := Vector3(-95.0, 0.0, -14.0)
-# Default is a clean straight inbound (a strong showcase). Raise WEAVE_AMP to see
-# the second-order-prediction limit degrade hit rate against a maneuvering target.
-const WEAVE_AMP := 0.0         # lateral (Z) maneuver amplitude, m
-const WEAVE_OMEGA := 1.6       # maneuver angular rate, rad/s
-const MUZZLE_SPEED := 400.0
-const K_DRAG := 0.006
-const MEAS_NOISE := 1.0        # position measurement noise std, m
-const PROCESS_NOISE := 3.0     # tracker jerk spectral density
-const FIRE_INTERVAL := 0.16
-const FIRE_RANGE := 300.0
-const MIN_RANGE := 50.0
-const HIT_THRESH := 4.0
-const RUN_TIME := 4.5
+# Godot frame: X = down-range, Y = altitude (up), Z = cross-range.
+# A diving, gently curving (constant-acceleration) threat -- not a straight line --
+# engaged with slower rounds so the ballistic arc / drop is clearly visible.
+const TARGET_START := Vector3(480.0, 130.0, 80.0)
+const TARGET_VEL := Vector3(-115.0, -16.0, -20.0)   # inbound + gentle dive + slight cross
+const TARGET_ACCEL := Vector3(0.0, 0.0, 6.0)        # cross-range curve (CA, tracker-exact)
+const MUZZLE_SPEED := 400.0                          # keeps time-of-flight short -> reliable lead
+const K_DRAG := 0.0015
+const MEAS_NOISE := 1.5        # position measurement noise std, m
+const PROCESS_NOISE := 5.0     # tracker jerk spectral density (tuned for 60 Hz updates)
+const FIRE_INTERVAL := 0.11
+const FIRE_RANGE := 440.0
+const MIN_RANGE := 90.0
+const HIT_THRESH := 5.0
+const RUN_TIME := 3.6
 const RESET_DELAY := 2.5
-const MAX_PROJECTILES := 48
+const MAX_PROJECTILES := 64
 const MEAS_TRAIL := 24
 
 var solver: BallisticSolver = BallisticSolver.new()
@@ -36,6 +36,8 @@ var status_label: Label
 var projectiles: Array[Dictionary] = []
 var meas_markers: Array[MeshInstance3D] = []
 var hit_markers: Array[MeshInstance3D] = []
+var est_marker: MeshInstance3D
+var lead_line: MeshInstance3D
 
 var elapsed := 0.0
 var next_fire := 0.0
@@ -45,7 +47,7 @@ var best_miss := INF
 
 
 func true_pos(t: float) -> Vector3:
-	return TARGET_START + TARGET_VEL * t + Vector3(0.0, 0.0, WEAVE_AMP * sin(WEAVE_OMEGA * t))
+	return TARGET_START + TARGET_VEL * t + 0.5 * TARGET_ACCEL * t * t
 
 
 func _ready() -> void:
@@ -66,6 +68,16 @@ func _process(delta: float) -> void:
 	if rng < FIRE_RANGE and rng > MIN_RANGE and elapsed >= next_fire and elapsed <= RUN_TIME:
 		_fire()
 		next_fire = elapsed + FIRE_INTERVAL
+
+	# tracking story: noisy measurement (red) -> denoised estimate (cyan) -> lead (gold)
+	est_marker.position = tracker.estimated_position()
+	var lim := lead_line.mesh as ImmediateMesh
+	lim.clear_surfaces()
+	if pred_marker.position != Vector3.ZERO:
+		lim.surface_begin(Mesh.PRIMITIVE_LINES)
+		lim.surface_add_vertex(Vector3.ZERO)
+		lim.surface_add_vertex(pred_marker.position)
+		lim.surface_end()
 
 	_update_projectiles()
 	_update_status(rng)
@@ -92,8 +104,18 @@ func _fire() -> void:
 
 	var node := _sphere(2.2, Color(0.6, 0.7, 0.8))
 	add_child(node)
+	var trail := MeshInstance3D.new()
+	trail.mesh = ImmediateMesh.new()
+	var tmat := StandardMaterial3D.new()
+	tmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	tmat.albedo_color = Color(1.0, 0.72, 0.26)
+	tmat.emission_enabled = true
+	tmat.emission = Color(1.0, 0.72, 0.26)
+	trail.material_override = tmat
+	add_child(trail)
 	projectiles.append({
 		"node": node,
+		"trail": trail,
 		"points": pts,
 		"start_time": elapsed,
 		"t_star": t_star,
@@ -119,6 +141,16 @@ func _update_projectiles() -> void:
 
 		var pos := _sample_points(pts, age, t_star)
 		node.position = pos
+		var im := (info["trail"] as MeshInstance3D).mesh as ImmediateMesh
+		var f := clampf(age / maxf(0.001, t_star), 0.0, 1.0) * float(pts.size() - 1)
+		var upto := int(floor(f))
+		im.clear_surfaces()
+		if upto >= 1:
+			im.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+			for k in range(upto + 1):
+				im.surface_add_vertex(pts[k])
+			im.surface_add_vertex(pos)
+			im.surface_end()
 		var d := pos.distance_to(true_pos(elapsed))
 		if d < float(info["min_dist"]):
 			info["min_dist"] = d
@@ -160,7 +192,7 @@ func _reset() -> void:
 
 
 func _spawn_meas_marker(p: Vector3) -> void:
-	var m := _sphere(1.1, Color(1.0, 0.35, 0.25))
+	var m := _sphere(1.6, Color(1.0, 0.54, 0.43))
 	m.position = p
 	add_child(m)
 	meas_markers.append(m)
@@ -182,13 +214,15 @@ func _spawn_hit_marker(p: Vector3) -> void:
 func _remove_projectile(index: int) -> void:
 	var info: Dictionary = projectiles[index]
 	(info["node"] as MeshInstance3D).queue_free()
+	(info["trail"] as MeshInstance3D).queue_free()
 	projectiles.remove_at(index)
 
 
 func _build_scene() -> void:
 	var camera := Camera3D.new()
 	camera.fov = 50.0
-	camera.look_at_from_position(Vector3(120.0, 150.0, 250.0), Vector3(160.0, 0.0, 0.0), Vector3.UP)
+	camera.fov = 58.0
+	camera.look_at_from_position(Vector3(-170.0, 135.0, 205.0), Vector3(210.0, 45.0, 45.0), Vector3.UP)
 	camera.current = true
 	add_child(camera)
 
@@ -198,9 +232,9 @@ func _build_scene() -> void:
 
 	var ground := MeshInstance3D.new()
 	var ground_mesh := PlaneMesh.new()
-	ground_mesh.size = Vector2(900.0, 500.0)
+	ground_mesh.size = Vector2(1100.0, 700.0)
 	ground.mesh = ground_mesh
-	ground.position = Vector3(180.0, 0.0, 0.0)
+	ground.position = Vector3(310.0, 0.0, 60.0)
 	var ground_mat := StandardMaterial3D.new()
 	ground_mat.albedo_color = Color(0.10, 0.13, 0.16)
 	ground.material_override = ground_mat
@@ -216,12 +250,58 @@ func _build_scene() -> void:
 	pred_marker = _sphere(4.0, Color(1.0, 0.82, 0.16))
 	add_child(pred_marker)
 
+	# denoised track estimate (the CA-Kalman position) -- cyan
+	est_marker = _sphere(3.2, Color(0.3, 0.8, 1.0))
+	add_child(est_marker)
+
+	# lead line: launcher -> predicted intercept (the firing solution), gold
+	lead_line = MeshInstance3D.new()
+	lead_line.mesh = ImmediateMesh.new()
+	var lmat := StandardMaterial3D.new()
+	lmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	lmat.albedo_color = Color(1.0, 0.82, 0.16)
+	lmat.emission_enabled = true
+	lmat.emission = Color(1.0, 0.82, 0.16)
+	lead_line.material_override = lmat
+	add_child(lead_line)
+
+	# radar-style range rings on the ground: scale + depth + theme
+	var rings := MeshInstance3D.new()
+	var rim := ImmediateMesh.new()
+	rings.mesh = rim
+	var rmat := StandardMaterial3D.new()
+	rmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	rmat.albedo_color = Color(0.32, 0.5, 0.62, 0.45)
+	rings.material_override = rmat
+	add_child(rings)
+	rim.surface_begin(Mesh.PRIMITIVE_LINES)
+	for ring_r in [100, 200, 300, 400]:
+		var prev := Vector3(ring_r, 0.5, 0.0)
+		for k in range(1, 73):
+			var a := TAU * float(k) / 72.0
+			var p := Vector3(ring_r * cos(a), 0.5, ring_r * sin(a))
+			rim.surface_add_vertex(prev)
+			rim.surface_add_vertex(p)
+			prev = p
+	rim.surface_end()
+
 	var canvas := CanvasLayer.new()
 	add_child(canvas)
 	status_label = Label.new()
-	status_label.position = Vector2(18.0, 16.0)
-	status_label.add_theme_font_size_override("font_size", 16)
+	status_label.position = Vector2(18.0, 14.0)
+	status_label.add_theme_font_size_override("font_size", 17)
 	canvas.add_child(status_label)
+
+	var legend := RichTextLabel.new()
+	legend.bbcode_enabled = true
+	legend.fit_content = true
+	legend.scroll_active = false
+	legend.position = Vector2(18.0, 44.0)
+	legend.custom_minimum_size = Vector2(560.0, 0.0)
+	legend.add_theme_font_size_override("normal_font_size", 15)
+	legend.text = "[color=#ff5a40]● threat[/color]   [color=#ff8a6e]● noisy radar[/color]   [color=#4ccfff]● track estimate[/color]   [color=#ffd23f]● lead[/color]   [color=#ffb347]— round[/color]   [color=#33ff55]★ hit[/color]"
+	canvas.add_child(legend)
 
 
 func _sample_points(points: PackedVector3Array, t: float, t_star: float) -> Vector3:

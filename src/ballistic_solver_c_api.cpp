@@ -4,6 +4,7 @@
 
 #include "ballistic_solver_c_api.h"
 #include "ballistic_solver_core.hpp"
+#include "bs/solve_coord_lead.hpp"
 
 static inline bool finite3_ptr(const double* a)
 {
@@ -198,7 +199,7 @@ int32_t ballistic_solve(const BallisticInputs* in, BallisticOutputs* out)
         const Vec3 relPos0 = { in->relPos0[0], in->relPos0[1], in->relPos0[2] };
         const Vec3 relVel  = { in->relVel[0],  in->relVel[1],  in->relVel[2]  };
 
-        const SolverResult r = solve_launch_angles(relPos0, relVel, in->v0, in->kDrag, P);
+        const SolverResult r = solve_launch_angles_coord_lead(relPos0, relVel, in->v0, in->kDrag, P);
 
         fill_outputs(r, out);
 
@@ -236,7 +237,7 @@ int32_t ballistic_solve_accel(const BallisticAccelInputs* in, BallisticOutputs* 
         const Vec3 relVel  = { base->relVel[0],  base->relVel[1],  base->relVel[2]  };
         const Vec3 relAcc  = { in->relAcc[0], in->relAcc[1], in->relAcc[2] };
 
-        const SolverResult r = solve_launch_angles(relPos0, relVel, base->v0, base->kDrag, P, relAcc);
+        const SolverResult r = solve_launch_angles_coord_lead(relPos0, relVel, base->v0, base->kDrag, P, relAcc);
 
         fill_outputs(r, out);
 

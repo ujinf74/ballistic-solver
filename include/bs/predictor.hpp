@@ -3,6 +3,7 @@
 #include <functional>
 
 #include "solve.hpp"
+#include "solve_coord_lead.hpp"
 
 // ================================================================
 // Target predictor seam
@@ -80,7 +81,7 @@ inline SolverResult solve_launch_angles_predicted(
         const Vec3 relVel = v - tf * a;
         const Vec3 relPos0 = p - tf * v + (0.5 * tf * tf) * a;
 
-        out = solve_launch_angles(relPos0, relVel, v0, kDrag, P, relAcc);
+        out = solve_launch_angles_coord_lead(relPos0, relVel, v0, kDrag, P, relAcc);
 
         if (!std::isfinite(out.tStar))
         {

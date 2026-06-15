@@ -93,6 +93,7 @@ This project instead **simulates the projectile** and **solves the intercept num
 * Extended C ABI utilities (since v0.4)
 * Quartic vacuum-lead initialization for moving targets (since v0.6)
 * High-arc moving-target auxiliary multi-start fallback (since v0.6.1)
+* Coordinate-residual Gauss–Newton core with vacuum-seeded Jacobian (default since v1.0; ~15–25% faster, auxiliary-residual method kept as `solve_aux`)
 * Fast / balanced / precise solver presets
 * Physical drag helper: `kDrag = 0.5 * rho * Cd * area / mass`
 * Robust in strongly nonlinear regimes (no analytic assumptions)
@@ -131,6 +132,21 @@ Returned dict keys include:
 * `message` (short diagnostic string)
 * plus convergence diagnostics (`iterations`, `acceptedSteps`, `lastLambda`, `lastAlpha`)
 
+`solve` uses the coordinate-residual core (Gauss–Newton on the 3D closest-approach
+miss, vacuum-seeded Jacobian, multistart fallback). It is the same signature as
+before and a drop-in replacement, typically ~15–25% faster at equal robustness.
+
+### `solve_aux(...)`
+
+```python
+solve_aux(relPos0, relVel, v0, kDrag, arcMode=None, params=None, relAcc=None) -> dict
+```
+
+The previous default: the auxiliary-residual method (re-aim through the vacuum
+inverse, solved by damped least squares with a multistart fallback). Same return
+dict as `solve`. Kept for compatibility and for reproducing the auxiliary-residual
+results.
+
 ### `solve_predicted(...)`
 
 ```python
@@ -160,6 +176,12 @@ model). It denoises the track and recovers velocity/acceleration without
 finite-difference noise, then feeds the predictor seam — so callers never supply
 `relVel`/`relAcc`. See `benchmarks/predictor_eval.py` for a lead-prediction
 accuracy comparison against a constant-velocity baseline.
+
+A real-time 3D showcase — the tracker leading a noisy, diving moving target with
+range rings, tracer trails, and a live hit-rate HUD — is in `examples/godot/`
+(default scene `demo/intercept_demo.tscn`).
+
+https://github.com/user-attachments/assets/7de04137-61d9-4cf0-be5e-9804d6a9c67b
 
 ### Utilities
 
@@ -335,14 +357,21 @@ This works directly inside Unity.
 ## How it works (high level)
 
 1. Build a vacuum-lead initial guess from the moving-target quartic.
-2. Simulate projectile motion using RK4 integration with drag (+ wind).
-3. Track the closest approach between projectile and target.
-4. Express the miss at closest approach as an angular residual.
-5. Apply a one-shot fixed-point correction before the main iteration.
-6. Solve the nonlinear system using damped least squares (Levenberg–Marquardt).
-7. Accelerate Jacobian updates with Broyden-style refinement.
-8. If the main solve stalls, retry the same auxiliary residual from additional time-based seeds.
-9. Return the best solution found.
+2. Seed the inverse Jacobian analytically from the vacuum-arc map (no trajectory
+   integration), as a cheap preconditioner.
+3. Simulate projectile motion using RK4 integration with drag (+ wind) and track
+   the closest approach between projectile and target.
+4. Use the 3D closest-approach miss vector itself as the residual (it is
+   well-conditioned), and solve the launch angles by Gauss-Newton on it.
+5. Refine the Jacobian with Broyden-style rank-1 updates; take full steps
+   (no Levenberg–Marquardt damping, no line search).
+6. If the warm start does not reach tolerance, retry from a small arc-appropriate
+   theta-grid multistart.
+7. Return the best solution found.
+
+`solve` uses this coordinate-residual core. The earlier auxiliary-residual method
+(re-aim through the vacuum inverse, with damped least squares) remains available
+as `solve_aux` for compatibility and reproducibility.
 
 Failure cases are explicitly detected and reported.
 
@@ -377,6 +406,10 @@ accept a solution.
 * `6` = LineSearchRejected
 * `7` = LambdaTriesExhausted
 * `8` = MaxIterReached
+
+The default coordinate-residual `solve` emits `Ok`, `InvalidInput`, `JacobianFailed`,
+or `MaxIterReached`. The Levenberg–Marquardt codes (`4`–`7`) are specific to the
+auxiliary-residual `solve_aux` path.
 
 `message` contains a short diagnostic string.
 
@@ -414,19 +447,19 @@ measured on Windows NT 10.0.26200.0, AMD Ryzen 9 6900HS, Python 3.12.8, MSVC
 Reference preset result from the same local Release build:
 
 ```text
-fast:     500/500, median 0.097 ms, p95 0.252 ms, p95 miss 3.425e-02 m
-balanced: 500/500, median 0.191 ms, p95 0.501 ms, p95 miss 4.803e-03 m
-precise:  500/500, median 0.200 ms, p95 0.582 ms, p95 miss 5.086e-06 m
+fast:     500/500, median 0.054 ms, p95 0.237 ms, p95 miss 2.810e-02 m
+balanced: 500/500, median 0.115 ms, p95 0.492 ms, p95 miss 7.053e-03 m
+precise:  500/500, median 0.168 ms, p95 0.669 ms, p95 miss 5.596e-06 m
 ```
 
-Current default solver results from 10,000 generated cases with seed `20260503`.
-The last row is the high-arc moving-target stress case:
+Current default solver (coordinate-residual core) results from 10,000 generated
+cases with seed `20260503`. The last row is the high-arc moving-target stress case:
 
 | Case set | Success | Median runtime | P95 runtime | P95 miss |
 |---|---:|---:|---:|---:|
-| Low arc, moving target | 10000/10000 (100.00%) | 0.434 ms | 0.871 ms | 5.915e-03 m |
-| High arc, stationary target | 10000/10000 (100.00%) | 1.234 ms | 1.939 ms | 7.961e-03 m |
-| High arc, moving target | 10000/10000 (100.00%) | 1.319 ms | 2.503 ms | 8.308e-03 m |
+| Low arc, moving target | 10000/10000 (100.00%) | 0.168 ms | 0.510 ms | 6.450e-03 m |
+| High arc, stationary target | 10000/10000 (100.00%) | 0.785 ms | 1.604 ms | 8.018e-03 m |
+| High arc, moving target | 10000/10000 (100.00%) | 1.126 ms | 2.350 ms | 8.341e-03 m |
 
 ---
 

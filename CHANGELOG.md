@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. Versions follow
 `vMAJOR.MINOR.PATCH` git tags; the build derives its version from the tag.
 
-## Unreleased
+## 1.0.0
 
 ### Added
 
@@ -30,9 +30,26 @@ All notable changes to this project are documented here. Versions follow
   scored burst. `benchmarks/intercept_eval.py` covers robotics / security /
   agriculture / defense scenarios, and `examples/viz/intercept_viz.py` renders
   miss-vs-range curves and an engagement GIF (matplotlib, optional).
+- Coordinate-residual solver core (`include/bs/solve_coord_lead.hpp`): solves the
+  launch angles by Gauss-Newton on the 3D closest-approach miss vector, with the
+  inverse Jacobian seeded analytically from the vacuum-arc map (no trajectory
+  integration) and refined by Broyden, plus an arc-grid multistart fallback. No
+  Levenberg-Marquardt damping or line search.
+- `solve_aux` (Python): the prior auxiliary-residual solver, kept for
+  compatibility and for reproducing the auxiliary-residual results.
 
 ### Changed
 
+- Default solver swapped to the coordinate-residual core: `solve` (Python) and
+  `ballistic_solve` / `ballistic_solve_accel` (C ABI) now use it. Same signatures
+  and result dict; ~15-25% faster at equal (100%) success across the low/high x
+  moving/stationary case sets, and simpler (drops the auxiliary residual, LM, and
+  line search from the default path). The auxiliary-residual method remains as
+  `solve_aux`; `SolveStatus` codes 4-7 are specific to it. C ABI struct layout is
+  unchanged (binary-compatible).
+- Godot `intercept_demo`: round tracer trails, lead-to-intercept line, a denoised
+  track-estimate marker, radar range rings, and a 3/4 camera; the
+  `BallisticTracker` firing solve uses the precise preset.
 - Refactor: split `ballistic_solver_core.hpp` into focused headers under
   `include/bs/` (vec3, math_utils, params, integrator, target, closest_approach,
   vacuum_lead, residual, lm, solve, predictor). Behavior-preserving; the umbrella

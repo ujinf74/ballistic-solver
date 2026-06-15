@@ -204,7 +204,9 @@ Vector3 BallisticTracker::estimated_acceleration() const
 
 Dictionary BallisticTracker::solve(double v0, double k_drag, int arc_mode) const
 {
-    BallisticParams P;
+    BallisticParams P = make_params_preset(ParamPreset::Precise);
+    P.dt = 0.004;
+    P.tMax = 8.0;
     P.arcMode = (arc_mode == 1) ? ArcMode::High : ArcMode::Low;
 
     const SolverResult r = solve_launch_angles_predicted(tracker_.predictor(), v0, k_drag, P);

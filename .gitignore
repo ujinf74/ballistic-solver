@@ -72,6 +72,7 @@ examples/godot/.build/*
 examples/godot/.godot/
 examples/godot/.sconsign.dblite
 examples/godot/ballistic_solver.dll
+examples/godot/renders/
 
 # Visualization render outputs
 examples/viz/renders/
@@ -80,3 +81,8 @@ examples/viz/renders/
 assets/
 examples/unity/Assets/
 *.pdf
+
+# Experimental / benchmark-only solver scaffolding (not part of the shipped library)
+include/bs/solve_variants.hpp
+include/bs/solve_coord.hpp
+benchmarks/jacobian_coord_probe.py

@@ -11,7 +11,8 @@ inline SolverResult solve_launch_angles(
     double v0,
     double kDrag,
     const BallisticParams& P = BallisticParams{},
-    const Vec3& relAcc = Vec3{ 0.0, 0.0, 0.0 })
+    const Vec3& relAcc = Vec3{ 0.0, 0.0, 0.0 },
+    bool allowMultistart = true)
 {
     SolverResult out{};
 
@@ -290,7 +291,7 @@ inline SolverResult solve_launch_angles(
         }
     }
 
-    if (!std::isfinite(bestMiss) || bestMiss > P.tolMiss)
+    if (allowMultistart && (!std::isfinite(bestMiss) || bestMiss > P.tolMiss))
     {
         solve_auxiliary_multistart(
             bestTheta, bestPhi, bestMiss, bestRelMiss, bestTime,

@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://b8intercept0d01"]
+[gd_scene load_steps=2 format=3 uid="uid://chp14x5t2h353"]
 
 [ext_resource type="Script" path="res://demo/intercept_demo.gd" id="1_intercept"]
 
