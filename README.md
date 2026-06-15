@@ -347,6 +347,43 @@ Each release contains:
 
 ---
 
+## Use as a CMake dependency (C/C++)
+
+Pull the library straight into your CMake build with FetchContent:
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(
+    ballistic_solver
+    GIT_REPOSITORY https://github.com/ujinf74/ballistic-solver.git
+    GIT_TAG v1.0.0
+)
+set(BUILD_TESTING OFF)  # don't build the library's own tests in your tree
+FetchContent_MakeAvailable(ballistic_solver)
+
+target_link_libraries(your_app PRIVATE ballistic_solver)
+```
+
+Linking `ballistic_solver` puts the C ABI header on your include path:
+
+```c
+#include "ballistic_solver_c_api.h"
+
+BallisticInputs in; BallisticOutputs out = {0};
+ballistic_inputs_init(&in);
+in.relPos0[0] = 120; in.relPos0[1] = 30; in.relPos0[2] = 5;
+in.relVel[0]  = 2;   in.relVel[1]  = -1; in.relVel[2]  = 0;
+in.v0 = 90; in.kDrag = 0.002;
+
+if (ballistic_solve(&in, &out) == 0 && out.success)
+    printf("theta=%.4f phi=%.4f miss=%.4f\n", out.theta, out.phi, out.miss);
+```
+
+C++ users who prefer the header-only core can instead `#include "bs/solve_coord_lead.hpp"`
+and call `solve_launch_angles_coord_lead(...)` directly — no linking required.
+
+---
+
 ## C# / Unity usage
 
 A C# P/Invoke example is available in:
@@ -360,6 +397,22 @@ On Windows, place `ballistic_solver.dll` next to the executable
 then call `ballistic_solve` via `DllImport`.
 
 This works directly inside Unity.
+
+---
+
+## Godot
+
+The GDExtension addon in `examples/godot/` exposes the solver to GDScript:
+
+```gdscript
+var solver := BallisticSolver.new()
+var r := solver.solve(rel_pos0, rel_vel, v0, k_drag, 0)  # arc_mode: 0 low, 1 high
+if r.success:
+    aim_at(r.theta, r.phi)  # elevation, azimuth in radians
+```
+
+A position-only `BallisticTracker` (Kalman) with the same `solve(v0, k_drag, arc_mode)`
+seam is also provided — it powers the real-time demo at the top of this README.
 
 ---
 
