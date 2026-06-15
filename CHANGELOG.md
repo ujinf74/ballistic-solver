@@ -3,6 +3,15 @@
 All notable changes to this project are documented here. Versions follow
 `vMAJOR.MINOR.PATCH` git tags; the build derives its version from the tag.
 
+## Unreleased
+
+### Added
+
+- Modern C++ API surface in `<ballistic_solver.hpp>`: `bs::solve` / `bs::solve_aux`
+  taking `bs::Problem` and `bs::Options` and returning `bs::Intercept`, namespaced
+  and compiled into the shared library so no internal symbols leak into consumers.
+  The C ABI (`ballistic_solve`) remains the stable / FFI boundary.
+
 ## 1.0.0
 
 ### Added

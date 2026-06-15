@@ -364,7 +364,40 @@ FetchContent_MakeAvailable(ballistic_solver)
 target_link_libraries(your_app PRIVATE ballistic_solver)
 ```
 
-Linking `ballistic_solver` puts the C ABI header on your include path:
+### C++
+
+```cpp
+#include <ballistic_solver.hpp>
+
+bs::Problem problem;
+problem.rel_pos0 = {120, 30, 5};
+problem.rel_vel  = {2, -1, 0};
+problem.v0       = 90;
+problem.k_drag   = 0.002;
+
+bs::Options options;
+options.preset = bs::Preset::Precise;
+
+bs::Intercept r = bs::solve(problem, options);
+if (r)                       // explicit operator bool() == success
+    aim(r.theta, r.phi);     // elevation, azimuth in radians
+```
+
+With C++20 designated initializers the same call is more compact:
+
+```cpp
+auto r = bs::solve({.rel_pos0 = {120, 30, 5},
+                    .rel_vel  = {2, -1, 0},
+                    .v0       = 90,
+                    .k_drag   = 0.002},
+                   {.preset = bs::Preset::Precise});
+```
+
+The `bs::` API is source-level (build it with the same toolchain as the
+library; none of the internal headers leak into your code). For a stable ABI or
+FFI from other languages, use the C API instead.
+
+### C (stable ABI)
 
 ```c
 #include "ballistic_solver_c_api.h"
@@ -378,9 +411,6 @@ in.v0 = 90; in.kDrag = 0.002;
 if (ballistic_solve(&in, &out) == 0 && out.success)
     printf("theta=%.4f phi=%.4f miss=%.4f\n", out.theta, out.phi, out.miss);
 ```
-
-C++ users who prefer the header-only core can instead `#include "bs/solve_coord_lead.hpp"`
-and call `solve_launch_angles_coord_lead(...)` directly — no linking required.
 
 ---
 

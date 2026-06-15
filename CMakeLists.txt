@@ -36,6 +36,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(ballistic_solver SHARED
     src/ballistic_solver_c_api.cpp
+    src/ballistic_solver.cpp
 )
 
 target_include_directories(ballistic_solver
