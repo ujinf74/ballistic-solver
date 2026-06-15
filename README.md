@@ -1,13 +1,3 @@
-# Official repository notice
-
-This is the only official repository for ballistic-solver.
-
-Official repository:
-https://github.com/ujinf74/ballistic-solver
-
-Do not download ZIP files, binaries, or installers from third-party copies, mirrors, or reuploads.
-Use only the Releases page of this repository.
-
 <img width="2024" alt="banner" src="https://github.com/user-attachments/assets/f4e57e3f-f584-4938-a321-e9dd83dbbac3" />
 
 [![CI](https://github.com/ujinf74/ballistic-solver/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ujinf74/ballistic-solver/actions/workflows/ci.yml)
@@ -15,14 +5,17 @@ Use only the Releases page of this repository.
 [![PyPI](https://img.shields.io/pypi/v/ballistic-solver)](https://pypi.org/project/ballistic-solver/)
 [![License](https://img.shields.io/github/license/ujinf74/ballistic-solver)](https://github.com/ujinf74/ballistic-solver/blob/main/LICENSE)
 
-**ballistic-solver** is a native C/C++ numerical solver that computes launch angles to intercept **moving targets** under **gravity** and **quadratic air drag**, with optional **wind**.
+**ballistic-solver** is a native C/C++ numerical solver that computes the launch angles to hit **moving targets** under **gravity** and **quadratic air drag**, with optional **wind**. Unlike vacuum / closed-form solvers, it **simulates the projectile** and **solves the intercept numerically**, so it stays accurate even when trajectories are strongly curved. Ships as a header-only C++ core with a stable C ABI and Python (`pip install ballistic-solver`), C#/Unity, and Godot bindings.
 
-Unlike vacuum / closed-form solvers, this project **simulates the projectile** and **solves the intercept numerically**, aiming for robust real-time use even when trajectories are strongly curved.
+https://github.com/user-attachments/assets/7de04137-61d9-4cf0-be5e-9804d6a9c67b
 
-**Applications.** The solver only sees relative kinematics, so the same code fits
-many domains — robotics (interception / capture), perimeter security and
-counter-UAS, agricultural bird/pest deterrence, games and simulation, and
-defense. An optional position-only tracker (`bs.TargetTracker`) adds lead-fire
+> Real-time 3D showcase — the built-in tracker leading a noisy, diving target with range rings, tracer trails, and a live hit-rate HUD (`examples/godot/`).
+
+**Applications.** The solver only sees relative kinematics, so the same code
+drops into many domains — most visibly **games and simulation** (turret
+lead-targeting, projectile interception; see the demo above), and equally
+**robotics** (interception / capture), tracking, and other aiming / targeting
+problems. An optional position-only tracker (`bs.TargetTracker`) adds lead-fire
 from a noisy track. See `benchmarks/intercept_eval.py` and `examples/viz/` for
 cross-domain examples and accuracy comparisons.
 
@@ -177,11 +170,8 @@ finite-difference noise, then feeds the predictor seam — so callers never supp
 `relVel`/`relAcc`. See `benchmarks/predictor_eval.py` for a lead-prediction
 accuracy comparison against a constant-velocity baseline.
 
-A real-time 3D showcase — the tracker leading a noisy, diving moving target with
-range rings, tracer trails, and a live hit-rate HUD — is in `examples/godot/`
-(default scene `demo/intercept_demo.tscn`).
-
-https://github.com/user-attachments/assets/7de04137-61d9-4cf0-be5e-9804d6a9c67b
+The real-time 3D showcase at the top of this README is built on this tracker —
+the full project is in `examples/godot/` (default scene `demo/intercept_demo.tscn`).
 
 ### Utilities
 
@@ -468,6 +458,14 @@ cases with seed `20260503`. The last row is the high-arc moving-target stress ca
 * Plain C layout across the ABI boundary
 * Fixed-size arrays only
 * No dynamic allocation across the boundary
+
+---
+
+## Official repository
+
+The only official repository is https://github.com/ujinf74/ballistic-solver.
+Install from PyPI (`pip install ballistic-solver`) or this repository's Releases
+page — not from third-party copies, mirrors, or reuploads.
 
 ---
 
