@@ -7,7 +7,7 @@
 
 **ballistic-solver** computes the launch angles to hit **moving targets** under **gravity**, **quadratic air drag**, and optional **wind** — for games, simulation, robotics, and targeting.
 
-Unlike vacuum / closed-form solvers, it **simulates the projectile and solves the intercept numerically**, so it stays accurate on strongly curved trajectories. Header-only C++ core with a stable C ABI and Python (`pip install ballistic-solver`), C#/Unity, and Godot bindings.
+Unlike vacuum / closed-form solvers, it **simulates the projectile and solves the intercept numerically**, so it stays accurate on strongly curved trajectories. Native C/C++ core with a stable C ABI and a modern C++ API (`bs::solve`), plus Python (`pip install ballistic-solver`), C#/Unity, and Godot bindings.
 
 https://github.com/user-attachments/assets/7de04137-61d9-4cf0-be5e-9804d6a9c67b
 
@@ -112,7 +112,7 @@ See [docs/numerical_method.md](docs/numerical_method.md) for the full method.
 * Best-effort result returned even without perfect convergence
 * Explicit success / failure reporting (+ diagnostic message)
 * Stable C ABI for multi-language use
-* Header-only C++ core
+* Modern C++ API (`bs::solve` / `bs::solve_aux`)
 * Easy install via PyPI: `pip install ballistic-solver`
 
 ---
@@ -298,7 +298,6 @@ This enables usage from:
 * C / C++
 * Python (ctypes via the C ABI)
 * C# / .NET / Unity (P/Invoke)
-* Unity (UnityEngine.Vector3 wrapper example)
 * Godot 4 (GDExtension addon-style example)
 * Others via FFI
 
@@ -535,6 +534,8 @@ ctest --test-dir build
 ```
 
 The shared library target is `ballistic_solver`.
+
+---
 
 ## Regression and benchmark
 
