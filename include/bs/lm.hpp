@@ -46,6 +46,88 @@ inline void broyden_update(double J[2][2], const double sdx[2], const double ydf
     J[1][1] += u1 * sdx[1];
 }
 
+// Finite-difference step for an angle, clamped to the configured FD band.
+inline double fd_angle_step(double x, const BallisticParams& P)
+{
+    const double h = P.fdScale * (1.0 + std::fabs(x));
+    return std::clamp(h, P.fdMin, P.fdMax);
+}
+
+// Central-difference Jacobian of the 2-vector angle residual, falling back to a
+// one-sided difference against Fbase when a theta bound blocks one side.
+inline bool jacobian_angles_fd(
+    double th,
+    double ph,
+    const double Fbase[2],
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    const Vec3& relAcc,
+    double v0,
+    double kDrag,
+    const BallisticParams& P,
+    double Jout[2][2])
+{
+    double Fp[2], Fm[2];
+    double mTmp;
+    Vec3 relTmp;
+    double tTmp;
+
+    const double hth = fd_angle_step(th, P);
+
+    const bool canMinus = (th - hth >= P.thetaMin);
+    const bool canPlus = (th + hth <= P.thetaMax);
+
+    if (canMinus && canPlus)
+    {
+        if (!compute_angle_residual_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp) ||
+            !compute_angle_residual_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
+        {
+            return false;
+        }
+
+        Jout[0][0] = (Fp[0] - Fm[0]) / (2.0 * hth);
+        Jout[1][0] = wrap_pi(Fp[1] - Fm[1]) / (2.0 * hth);
+    }
+    else if (canPlus)
+    {
+        if (!compute_angle_residual_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp))
+        {
+            return false;
+        }
+
+        Jout[0][0] = (Fp[0] - Fbase[0]) / hth;
+        Jout[1][0] = wrap_pi(Fp[1] - Fbase[1]) / hth;
+    }
+    else if (canMinus)
+    {
+        if (!compute_angle_residual_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
+        {
+            return false;
+        }
+
+        Jout[0][0] = (Fbase[0] - Fm[0]) / hth;
+        Jout[1][0] = wrap_pi(Fbase[1] - Fm[1]) / hth;
+    }
+    else
+    {
+        return false;
+    }
+
+    const double hph = fd_angle_step(ph, P);
+
+    if (!compute_angle_residual_acc(th, wrap_pi(ph + hph), relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp) ||
+        !compute_angle_residual_acc(th, wrap_pi(ph - hph), relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
+    {
+        return false;
+    }
+
+    Jout[0][1] = (Fp[0] - Fm[0]) / (2.0 * hph);
+    Jout[1][1] = wrap_pi(Fp[1] - Fm[1]) / (2.0 * hph);
+
+    return std::isfinite(Jout[0][0]) && std::isfinite(Jout[1][0]) &&
+           std::isfinite(Jout[0][1]) && std::isfinite(Jout[1][1]);
+}
+
 // ================================================================
 // Result
 // ================================================================
@@ -367,6 +449,164 @@ inline void add_time_grid_seeds(
     }
 }
 
+// Builds the multistart seed set (vacuum-lead guess plus a time grid), sorted
+// by miss. Returns how many seeds are usable.
+inline int collect_multistart_seeds(
+    std::array<CandidateState, 4>& seeds,
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    const Vec3& relAcc,
+    double v0,
+    double kDrag,
+    const BallisticParams& P)
+{
+    double theta = 0.0;
+    double phi = 0.0;
+    initial_guess_vacuum_lead_acc(relPos0, relVel, relAcc, v0, P.arcMode, P.g, theta, phi, P.tMax);
+    theta = std::clamp(theta, P.thetaMin, P.thetaMax);
+    phi = wrap_pi(phi);
+
+    int seedCount = 0;
+
+    CandidateState cur{};
+    if (evaluate_candidate(cur, theta, phi, relPos0, relVel, relAcc, v0, kDrag, P))
+    {
+        seeds[seedCount++] = cur;
+    }
+
+    add_time_grid_seeds(seeds, seedCount, relPos0, relVel, relAcc, v0, kDrag, P);
+
+    std::sort(seeds.begin(), seeds.begin() + seedCount, [](const CandidateState& a, const CandidateState& b)
+    {
+        return a.miss < b.miss;
+    });
+
+    return seedCount;
+}
+
+// Runs one Levenberg-Marquardt descent from a single seed, folding its best
+// point into `best`. Sets ranAnySeed once a seed produced a usable Jacobian.
+inline void run_multistart_seed(
+    const CandidateState& seed,
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    const Vec3& relAcc,
+    double v0,
+    double kDrag,
+    const BallisticParams& P,
+    SolveReport& report,
+    CandidateState& best,
+    bool& ranAnySeed)
+{
+    CandidateState current = seed;
+    CandidateState localBest = current;
+    double thetaSeed = current.theta;
+    double phiSeed = current.phi;
+    double lambda = std::clamp(P.lambdaInit, P.lambdaMin, P.lambdaMax);
+
+    double J[2][2];
+    if (!jacobian_angles_fd(thetaSeed, phiSeed, current.F, relPos0, relVel, relAcc, v0, kDrag, P, J))
+    {
+        return;
+    }
+
+    ranAnySeed = true;
+
+    for (int it = 0; it < P.maxIter; ++it)
+    {
+        if (current.miss <= P.tolMiss)
+        {
+            break;
+        }
+
+        bool accepted = false;
+        for (int lt = 0; lt < P.lambdaTries; ++lt)
+        {
+            double dtheta;
+            double dphi;
+            if (!solve_lm_step_2x2(J, current.F, lambda, dtheta, dphi))
+            {
+                lambda = std::clamp(lambda * P.lambdaUpMul, P.lambdaMin, P.lambdaMax);
+                continue;
+            }
+
+            double alpha = 1.0;
+            CandidateState chosen = current;
+            bool haveChosen = false;
+            const double missOld = current.miss;
+            for (int ls = 0; ls < P.lineSearchTries; ++ls)
+            {
+                const double thetaTry = std::clamp(thetaSeed + alpha * dtheta, P.thetaMin, P.thetaMax);
+                const double phiTry = wrap_pi(phiSeed + alpha * dphi);
+                CandidateState cand{};
+                if (evaluate_candidate(cand, thetaTry, phiTry, relPos0, relVel, relAcc, v0, kDrag, P))
+                {
+                    if (!haveChosen || cand.miss < chosen.miss)
+                    {
+                        chosen = cand;
+                        haveChosen = true;
+                    }
+                    if (cand.miss <= missOld + P.missEps)
+                    {
+                        accepted = true;
+                        chosen = cand;
+                        break;
+                    }
+                }
+                alpha *= P.lineSearchShrink;
+                if (alpha < P.alphaMin)
+                {
+                    break;
+                }
+            }
+
+            if (!accepted && haveChosen && chosen.miss < missOld)
+            {
+                accepted = true;
+            }
+            if (!accepted)
+            {
+                lambda = std::clamp(lambda * P.lambdaUpMul, P.lambdaMin, P.lambdaMax);
+                continue;
+            }
+
+            report.acceptedSteps += 1;
+            if (chosen.miss < missOld - P.missEps)
+            {
+                lambda = std::clamp(lambda * P.lambdaDownMul, P.lambdaMin, P.lambdaMax);
+            }
+
+            const double sdx[2] = { chosen.theta - thetaSeed, wrap_pi(chosen.phi - phiSeed) };
+            const double ydf[2] = { chosen.F[0] - current.F[0], wrap_pi(chosen.F[1] - current.F[1]) };
+            broyden_update(J, sdx, ydf, P.broydenMinDenom);
+
+            thetaSeed = chosen.theta;
+            phiSeed = wrap_pi(chosen.phi);
+            current = chosen;
+            if (current.miss < localBest.miss)
+            {
+                localBest = current;
+            }
+            break;
+        }
+
+        if (!accepted)
+        {
+            break;
+        }
+    }
+
+    if (localBest.miss < best.miss)
+    {
+        best = localBest;
+    }
+
+    if (localBest.miss < best.miss)
+    {
+        best = localBest;
+    }
+}
+
 inline bool solve_auxiliary_multistart(
     double& bestTheta,
     double& bestPhi,
@@ -381,208 +621,20 @@ inline bool solve_auxiliary_multistart(
     const BallisticParams& P,
     SolveReport& report)
 {
-    double theta = 0.0;
-    double phi = 0.0;
-    initial_guess_vacuum_lead_acc(relPos0, relVel, relAcc, v0, P.arcMode, P.g, theta, phi, P.tMax);
-    theta = std::clamp(theta, P.thetaMin, P.thetaMax);
-    phi = wrap_pi(phi);
-
     std::array<CandidateState, 4> seeds{};
-    int seedCount = 0;
-
-    CandidateState cur{};
-    if (evaluate_candidate(cur, theta, phi, relPos0, relVel, relAcc, v0, kDrag, P))
-    {
-        seeds[seedCount++] = cur;
-    }
-
-    add_time_grid_seeds(seeds, seedCount, relPos0, relVel, relAcc, v0, kDrag, P);
+    const int seedCount = collect_multistart_seeds(seeds, relPos0, relVel, relAcc, v0, kDrag, P);
 
     if (seedCount == 0)
     {
         return false;
     }
 
-    std::sort(seeds.begin(), seeds.begin() + seedCount, [](const CandidateState& a, const CandidateState& b)
-    {
-        return a.miss < b.miss;
-    });
-
-    auto pick_fd_step = [&](double x) -> double
-    {
-        const double h = P.fdScale * (1.0 + std::fabs(x));
-        return std::clamp(h, P.fdMin, P.fdMax);
-    };
-
-    auto jacobian_aux_fd = [&](double th, double ph, const double Fbase[2], double Jout[2][2]) -> bool
-    {
-        double Fp[2], Fm[2];
-        double mTmp;
-        Vec3 relTmp;
-        double tTmp;
-
-        const double hth = pick_fd_step(th);
-        const bool canPlus = (th + hth <= P.thetaMax);
-        const bool canMinus = (th - hth >= P.thetaMin);
-
-        if (canMinus && canPlus)
-        {
-            if (!compute_angle_residual_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp) ||
-                !compute_angle_residual_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
-            {
-                return false;
-            }
-            Jout[0][0] = (Fp[0] - Fm[0]) / (2.0 * hth);
-            Jout[1][0] = wrap_pi(Fp[1] - Fm[1]) / (2.0 * hth);
-        }
-        else if (canPlus)
-        {
-            if (!compute_angle_residual_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp))
-            {
-                return false;
-            }
-            Jout[0][0] = (Fp[0] - Fbase[0]) / hth;
-            Jout[1][0] = wrap_pi(Fp[1] - Fbase[1]) / hth;
-        }
-        else if (canMinus)
-        {
-            if (!compute_angle_residual_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
-            {
-                return false;
-            }
-            Jout[0][0] = (Fbase[0] - Fm[0]) / hth;
-            Jout[1][0] = wrap_pi(Fbase[1] - Fm[1]) / hth;
-        }
-        else
-        {
-            return false;
-        }
-
-        const double hph = pick_fd_step(ph);
-        if (!compute_angle_residual_acc(th, wrap_pi(ph + hph), relPos0, relVel, relAcc, v0, kDrag, P, Fp, mTmp, relTmp, tTmp) ||
-            !compute_angle_residual_acc(th, wrap_pi(ph - hph), relPos0, relVel, relAcc, v0, kDrag, P, Fm, mTmp, relTmp, tTmp))
-        {
-            return false;
-        }
-
-        Jout[0][1] = (Fp[0] - Fm[0]) / (2.0 * hph);
-        Jout[1][1] = wrap_pi(Fp[1] - Fm[1]) / (2.0 * hph);
-        return std::isfinite(Jout[0][0]) && std::isfinite(Jout[1][0]) &&
-               std::isfinite(Jout[0][1]) && std::isfinite(Jout[1][1]);
-    };
-
     CandidateState best = seeds[0];
     bool ranAnySeed = false;
 
-    auto run_seed = [&](const CandidateState& seed) -> void
-    {
-        CandidateState current = seed;
-        CandidateState localBest = current;
-        double thetaSeed = current.theta;
-        double phiSeed = current.phi;
-        double lambda = std::clamp(P.lambdaInit, P.lambdaMin, P.lambdaMax);
-
-        double J[2][2];
-        if (!jacobian_aux_fd(thetaSeed, phiSeed, current.F, J))
-        {
-            return;
-        }
-
-        ranAnySeed = true;
-
-        for (int it = 0; it < P.maxIter; ++it)
-        {
-            if (current.miss <= P.tolMiss)
-            {
-                break;
-            }
-
-            bool accepted = false;
-            for (int lt = 0; lt < P.lambdaTries; ++lt)
-            {
-                double dtheta;
-                double dphi;
-                if (!solve_lm_step_2x2(J, current.F, lambda, dtheta, dphi))
-                {
-                    lambda = std::clamp(lambda * P.lambdaUpMul, P.lambdaMin, P.lambdaMax);
-                    continue;
-                }
-
-                double alpha = 1.0;
-                CandidateState chosen = current;
-                bool haveChosen = false;
-                const double missOld = current.miss;
-                for (int ls = 0; ls < P.lineSearchTries; ++ls)
-                {
-                    const double thetaTry = std::clamp(thetaSeed + alpha * dtheta, P.thetaMin, P.thetaMax);
-                    const double phiTry = wrap_pi(phiSeed + alpha * dphi);
-                    CandidateState cand{};
-                    if (evaluate_candidate(cand, thetaTry, phiTry, relPos0, relVel, relAcc, v0, kDrag, P))
-                    {
-                        if (!haveChosen || cand.miss < chosen.miss)
-                        {
-                            chosen = cand;
-                            haveChosen = true;
-                        }
-                        if (cand.miss <= missOld + P.missEps)
-                        {
-                            accepted = true;
-                            chosen = cand;
-                            break;
-                        }
-                    }
-                    alpha *= P.lineSearchShrink;
-                    if (alpha < P.alphaMin)
-                    {
-                        break;
-                    }
-                }
-
-                if (!accepted && haveChosen && chosen.miss < missOld)
-                {
-                    accepted = true;
-                }
-                if (!accepted)
-                {
-                    lambda = std::clamp(lambda * P.lambdaUpMul, P.lambdaMin, P.lambdaMax);
-                    continue;
-                }
-
-                report.acceptedSteps += 1;
-                if (chosen.miss < missOld - P.missEps)
-                {
-                    lambda = std::clamp(lambda * P.lambdaDownMul, P.lambdaMin, P.lambdaMax);
-                }
-
-                const double sdx[2] = { chosen.theta - thetaSeed, wrap_pi(chosen.phi - phiSeed) };
-                const double ydf[2] = { chosen.F[0] - current.F[0], wrap_pi(chosen.F[1] - current.F[1]) };
-                broyden_update(J, sdx, ydf, P.broydenMinDenom);
-
-                thetaSeed = chosen.theta;
-                phiSeed = wrap_pi(chosen.phi);
-                current = chosen;
-                if (current.miss < localBest.miss)
-                {
-                    localBest = current;
-                }
-                break;
-            }
-
-            if (!accepted)
-            {
-                break;
-            }
-        }
-
-        if (localBest.miss < best.miss)
-        {
-            best = localBest;
-        }
-    };
-
     for (int i = 0; i < seedCount; ++i)
     {
-        run_seed(seeds[i]);
+        run_multistart_seed(seeds[i], relPos0, relVel, relAcc, v0, kDrag, P, report, best, ranAnySeed);
         if (best.miss <= P.tolMiss)
         {
             break;

@@ -2,6 +2,60 @@
 
 #include "lm.hpp"
 
+// Guards every field solve_launch_angles dereferences before it integrates.
+inline bool solve_inputs_are_valid(double v0, double kDrag, const BallisticParams& P)
+{
+    return std::isfinite(v0) && v0 > 0.0 && std::isfinite(kDrag) &&
+           std::isfinite(P.g) && P.g > 0.0 && std::isfinite(P.dt) && P.dt > 0.0 &&
+           std::isfinite(P.tMax) && P.tMax > 0.0 && P.maxIter > 0 &&
+           std::isfinite(P.lineSearchShrink) && P.lineSearchShrink > 0.0 && P.lineSearchShrink < 1.0 &&
+           std::isfinite(P.beta) && P.beta > 0.0 &&
+           P.thetaMin < P.thetaMax;
+}
+
+// One auxiliary-residual correction taken before the LM loop starts. Applied
+// (and reported) only when it strictly improves the miss.
+inline bool try_auxiliary_prestep(
+    double& theta,
+    double& phi,
+    double F[2],
+    double& miss,
+    Vec3& relMissAtStar,
+    double& tStar,
+    const Vec3& relPos0,
+    const Vec3& relVel,
+    const Vec3& relAcc,
+    double v0,
+    double kDrag,
+    const BallisticParams& P)
+{
+    CandidateState preStep{};
+    double preDtheta;
+    double preDphi;
+    const Vec3 preAim = target_pos_acc(relPos0, relVel, relAcc, tStar);
+    const bool havePreStep = compute_auxiliary_delta(
+        preAim, relMissAtStar, P.preStepBeta, v0, P, preDtheta, preDphi);
+    const double thetaTry = std::clamp(theta + (havePreStep ? preDtheta : F[0]), P.thetaMin, P.thetaMax);
+    const double phiTry = wrap_pi(phi + (havePreStep ? preDphi : F[1]));
+
+    if (evaluate_candidate(preStep, thetaTry, phiTry, relPos0, relVel, relAcc, v0, kDrag, P) &&
+        std::isfinite(preStep.miss) && preStep.miss < miss)
+    {
+        theta = preStep.theta;
+        phi = wrap_pi(preStep.phi);
+
+        F[0] = preStep.F[0];
+        F[1] = preStep.F[1];
+
+        miss = preStep.miss;
+        relMissAtStar = preStep.relMissAtStar;
+        tStar = preStep.tStar;
+        return true;
+    }
+
+    return false;
+}
+
 // ================================================================
 // Solve launch angles (Broyden)
 // ================================================================
@@ -16,100 +70,12 @@ inline SolverResult solve_launch_angles(
 {
     SolverResult out{};
 
-    // ----------------------------
-    // Input validation
-    // ----------------------------
-    if (!std::isfinite(v0) || v0 <= 0.0 || !std::isfinite(kDrag) ||
-        !std::isfinite(P.g) || P.g <= 0.0 || !std::isfinite(P.dt) || P.dt <= 0.0 ||
-        !std::isfinite(P.tMax) || P.tMax <= 0.0 || P.maxIter <= 0 ||
-        !std::isfinite(P.lineSearchShrink) || P.lineSearchShrink <= 0.0 || P.lineSearchShrink >= 1.0 ||
-        !std::isfinite(P.beta) || P.beta <= 0.0 ||
-        P.thetaMin >= P.thetaMax)
+    if (!solve_inputs_are_valid(v0, kDrag, P))
     {
         out.report.status = SolveStatus::InvalidInput;
         out.report.message = "InvalidInput: v0/g/dt/tMax/maxIter/theta range check failed.";
         return out;
     }
-
-    BallisticParams residualP = P;
-
-    auto pick_fd_step = [&](double x) -> double
-    {
-        double h = P.fdScale * (1.0 + std::fabs(x));
-        return std::clamp(h, P.fdMin, P.fdMax);
-    };
-
-    auto jacobian_fd = [&](double th, double ph, const double Fbase[2], double Jout[2][2]) -> bool
-    {
-        double Fp[2], Fm[2];
-        double mTmp;
-        Vec3 relTmp;
-        double tTmp;
-
-        const double hth = pick_fd_step(th);
-
-        const bool canMinus = (th - hth >= P.thetaMin);
-        const bool canPlus = (th + hth <= P.thetaMax);
-
-        if (canMinus && canPlus)
-        {
-            if (!compute_angle_residual_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, residualP, Fp, mTmp, relTmp, tTmp))
-            {
-                return false;
-            }
-            if (!compute_angle_residual_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, residualP, Fm, mTmp, relTmp, tTmp))
-            {
-                return false;
-            }
-
-            Jout[0][0] = (Fp[0] - Fm[0]) / (2.0 * hth);
-            Jout[1][0] = wrap_pi(Fp[1] - Fm[1]) / (2.0 * hth);
-        }
-        else if (canPlus)
-        {
-            if (!compute_angle_residual_acc(th + hth, ph, relPos0, relVel, relAcc, v0, kDrag, residualP, Fp, mTmp, relTmp, tTmp))
-            {
-                return false;
-            }
-
-            Jout[0][0] = (Fp[0] - Fbase[0]) / hth;
-            Jout[1][0] = wrap_pi(Fp[1] - Fbase[1]) / hth;
-        }
-        else if (canMinus)
-        {
-            if (!compute_angle_residual_acc(th - hth, ph, relPos0, relVel, relAcc, v0, kDrag, residualP, Fm, mTmp, relTmp, tTmp))
-            {
-                return false;
-            }
-
-            Jout[0][0] = (Fbase[0] - Fm[0]) / hth;
-            Jout[1][0] = wrap_pi(Fbase[1] - Fm[1]) / hth;
-        }
-        else
-        {
-            return false;
-        }
-
-        const double hph = pick_fd_step(ph);
-
-        const double php = wrap_pi(ph + hph);
-        const double phm = wrap_pi(ph - hph);
-
-        if (!compute_angle_residual_acc(th, php, relPos0, relVel, relAcc, v0, kDrag, residualP, Fp, mTmp, relTmp, tTmp))
-        {
-            return false;
-        }
-        if (!compute_angle_residual_acc(th, phm, relPos0, relVel, relAcc, v0, kDrag, residualP, Fm, mTmp, relTmp, tTmp))
-        {
-            return false;
-        }
-
-        Jout[0][1] = (Fp[0] - Fm[0]) / (2.0 * hph);
-        Jout[1][1] = wrap_pi(Fp[1] - Fm[1]) / (2.0 * hph);
-
-        return std::isfinite(Jout[0][0]) && std::isfinite(Jout[1][0]) &&
-               std::isfinite(Jout[0][1]) && std::isfinite(Jout[1][1]);
-    };
 
     // ----------------------------
     // Initial guess
@@ -124,7 +90,7 @@ inline SolverResult solve_launch_angles(
     Vec3 relMissAtStar{};
     double tStar = std::numeric_limits<double>::quiet_NaN();
 
-    if (!compute_angle_residual_acc(theta, phi, relPos0, relVel, relAcc, v0, kDrag, residualP, F, miss, relMissAtStar, tStar))
+    if (!compute_angle_residual_acc(theta, phi, relPos0, relVel, relAcc, v0, kDrag, P, F, miss, relMissAtStar, tStar))
     {
         out.theta = theta;
         out.phi = phi;
@@ -147,39 +113,19 @@ inline SolverResult solve_launch_angles(
     Vec3 bestRelMiss = relMissAtStar;
     double bestTime = tStar;
 
-    if (miss > P.tolMiss)
+    if (miss > P.tolMiss &&
+        try_auxiliary_prestep(theta, phi, F, miss, relMissAtStar, tStar,
+            relPos0, relVel, relAcc, v0, kDrag, P))
     {
-        CandidateState preStep{};
-        double preDtheta;
-        double preDphi;
-        const Vec3 preAim = target_pos_acc(relPos0, relVel, relAcc, tStar);
-        const bool havePreStep = compute_auxiliary_delta(
-            preAim, relMissAtStar, P.preStepBeta, v0, P, preDtheta, preDphi);
-        const double thetaTry = std::clamp(theta + (havePreStep ? preDtheta : F[0]), P.thetaMin, P.thetaMax);
-        const double phiTry = wrap_pi(phi + (havePreStep ? preDphi : F[1]));
-        if (evaluate_candidate(preStep, thetaTry, phiTry, relPos0, relVel, relAcc, v0, kDrag, residualP) &&
-            std::isfinite(preStep.miss) && preStep.miss < miss)
-        {
-            theta = preStep.theta;
-            phi = wrap_pi(preStep.phi);
-
-            F[0] = preStep.F[0];
-            F[1] = preStep.F[1];
-
-            miss = preStep.miss;
-            relMissAtStar = preStep.relMissAtStar;
-            tStar = preStep.tStar;
-
-            bestTheta = theta;
-            bestPhi = phi;
-            bestMiss = miss;
-            bestRelMiss = relMissAtStar;
-            bestTime = tStar;
-        }
+        bestTheta = theta;
+        bestPhi = phi;
+        bestMiss = miss;
+        bestRelMiss = relMissAtStar;
+        bestTime = tStar;
     }
 
     double J[2][2];
-    if (!jacobian_fd(theta, phi, F, J))
+    if (!jacobian_angles_fd(theta, phi, F, relPos0, relVel, relAcc, v0, kDrag, P, J))
     {
         out.theta = bestTheta;
         out.phi = bestPhi;
@@ -225,7 +171,7 @@ inline SolverResult solve_launch_angles(
             if (try_lm_step(
                     theta, phi, F, miss, relMissAtStar, tStar,
                     J, lambda,
-                    relPos0, relVel, relAcc, v0, kDrag, residualP,
+                    relPos0, relVel, relAcc, v0, kDrag, P,
                     out.report))
             {
                 acceptedGlobal = true;
@@ -265,11 +211,11 @@ inline SolverResult solve_launch_angles(
                 StepResult auxStep = line_search_best(
                     theta, phi, F, miss, relMissAtStar, tStar,
                     auxDtheta, auxDphi,
-                    relPos0, relVel, relAcc, v0, kDrag, residualP,
+                    relPos0, relVel, relAcc, v0, kDrag, P,
                     out.report);
                 acceptedGlobal = accept_step(
                     theta, phi, F, miss, relMissAtStar, tStar,
-                    J, lambda, residualP,
+                    J, lambda, P,
                     auxStep, missOld,
                     out.report);
                 if (acceptedGlobal && std::isfinite(miss) && (!std::isfinite(bestMiss) || (miss < bestMiss)))
@@ -295,7 +241,7 @@ inline SolverResult solve_launch_angles(
     {
         solve_auxiliary_multistart(
             bestTheta, bestPhi, bestMiss, bestRelMiss, bestTime,
-            relPos0, relVel, relAcc, v0, kDrag, residualP,
+            relPos0, relVel, relAcc, v0, kDrag, P,
             out.report);
     }
 
