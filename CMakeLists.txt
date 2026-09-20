@@ -65,6 +65,11 @@ add_executable(ballistic_solver_example
 )
 target_link_libraries(ballistic_solver_example PRIVATE ballistic_solver)
 
+add_executable(ballistic_solver_example_cpp
+    examples/cpp/basic.cpp
+)
+target_link_libraries(ballistic_solver_example_cpp PRIVATE ballistic_solver)
+
 include(CTest)
 if (BUILD_TESTING)
     add_executable(smoke_test
@@ -75,6 +80,16 @@ if (BUILD_TESTING)
     add_test(
         NAME smoke_test
         COMMAND $<TARGET_FILE:smoke_test>
+    )
+
+    add_executable(smoke_test_cpp
+        tests/smoke_test_cpp.cpp
+    )
+    target_link_libraries(smoke_test_cpp PRIVATE ballistic_solver)
+
+    add_test(
+        NAME smoke_test_cpp
+        COMMAND $<TARGET_FILE:smoke_test_cpp>
     )
 endif()
 
