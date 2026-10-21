@@ -3,6 +3,22 @@
 All notable changes to this project are documented here. Versions follow
 `vMAJOR.MINOR.PATCH` git tags; the build derives its version from the tag.
 
+## 1.2.1
+
+### Documentation / tooling
+
+- PyPI gets its own long description (`README.pypi.md`, 79 lines) instead of the
+  617-line repository README. Up to and including 1.2.0 the repository README
+  was published verbatim, so its relative `docs/` links resolved against
+  pypi.org/project/ballistic-solver/ and 404'd. The new page is written for
+  Python callers -- install, wheel matrix, an example, the scope -- and links
+  out to the repository for the rest.
+- The repository README's remaining relative links are now absolute, so they
+  survive being rendered outside the repository tree.
+
+No code changes: 1.2.1 is identical to 1.2.0 apart from packaging metadata and
+documentation.
+
 ## 1.2.0
 
 ### Added
