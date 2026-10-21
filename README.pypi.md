@@ -17,7 +17,7 @@ extension, not a pure-Python reimplementation.
 pip install ballistic-solver
 ```
 
-Wheels cover CPython 3.10-3.15 on Linux (`x86_64`, `aarch64`; manylinux and
+Wheels cover CPython 3.9-3.15 on Linux (`x86_64`, `aarch64`; manylinux and
 musllinux), macOS (`universal2`) and Windows (`AMD64`, `ARM64`). Other
 combinations build from the sdist, which needs CMake and a C++17 compiler.
 

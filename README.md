@@ -31,7 +31,7 @@ cross-domain examples and accuracy comparisons.
 pip install ballistic-solver
 ```
 
-Requires Python **>= 3.10**. Prebuilt wheels cover CPython 3.10-3.15:
+Requires Python **>= 3.10**. Prebuilt wheels cover CPython 3.9-3.15:
 
 | Platform | Architectures |
 | --- | --- |
