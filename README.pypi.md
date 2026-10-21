@@ -18,9 +18,9 @@ pip install ballistic-solver
 ```
 
 Wheels cover CPython 3.9-3.15 on Linux (`x86_64`, `aarch64`; manylinux and
-musllinux), macOS (`universal2`) and Windows (`AMD64`, `ARM64`), including the
-free-threaded `3.14t` and `3.15t` builds. Other combinations build from the
-sdist, which needs CMake and a C++17 compiler.
+musllinux), macOS (`universal2`) and Windows (`AMD64`, `ARM64`). The
+free-threaded `3.14t` and `3.15t` builds are covered on Linux and macOS. Other
+combinations build from the sdist, which needs CMake and a C++17 compiler.
 
 ## Use
 

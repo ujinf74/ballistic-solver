@@ -39,8 +39,10 @@ Requires Python **>= 3.10**. Prebuilt wheels cover CPython 3.9-3.15:
 | macOS | `universal2` (Intel + Apple Silicon) |
 | Windows | `AMD64`, `ARM64` |
 
-Free-threaded builds (`3.14t`, `3.15t`) are published as well. The module
-declares `mod_gil_not_used()`, so it loads without re-enabling the GIL. Solver
+Free-threaded builds (`3.14t`, `3.15t`) are published for Linux and macOS. The
+module declares `mod_gil_not_used()`, so it loads without re-enabling the GIL.
+Windows free-threaded wheels are not built yet: that toolchain looks for
+`python314.lib` rather than the free-threaded `python314t.lib`. Solver
 calls hold no shared state and run concurrently; a single `TargetTracker`
 instance does carry state, so give each thread its own rather than sharing one.
 
