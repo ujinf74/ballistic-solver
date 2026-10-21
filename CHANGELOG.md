@@ -17,6 +17,14 @@ All notable changes to this project are documented here. Versions follow
   neither receives security fixes. Both are published only because pybind11 and
   cibuildwheel still support them, and will be dropped when that changes.
 
+- Free-threaded wheels for CPython 3.14t and 3.15t. The module now declares
+  `py::mod_gil_not_used()`, so it loads on a free-threaded interpreter without
+  re-enabling the GIL. An audit found no mutable global or function-local
+  static state -- the only statics in the core are const lookup tables -- and
+  8 threads issuing 200 concurrent solves each return bit-identical results.
+  Solver entry points are stateless; a `TargetTracker` instance carries state
+  and must not be shared across threads unsynchronised.
+
 ## 1.2.1
 
 ### Documentation / tooling

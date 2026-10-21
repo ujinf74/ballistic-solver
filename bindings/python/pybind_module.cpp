@@ -97,7 +97,11 @@ static py::dict result_to_dict(const SolverResult& r)
     return out;
 }
 
-PYBIND11_MODULE(_core, m)
+// The module holds no mutable global or function-local static state -- the only
+// statics in the core are const lookup tables -- so it is safe to load without
+// the GIL. Note that this is a module-level promise: individual TargetTracker
+// instances carry state and must not be shared across threads unsynchronised.
+PYBIND11_MODULE(_core, m, py::mod_gil_not_used())
 {
     m.doc() = "Ballistic solver (pybind11 core)";
 

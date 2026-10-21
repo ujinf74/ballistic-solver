@@ -39,6 +39,11 @@ Requires Python **>= 3.10**. Prebuilt wheels cover CPython 3.9-3.15:
 | macOS | `universal2` (Intel + Apple Silicon) |
 | Windows | `AMD64`, `ARM64` |
 
+Free-threaded builds (`3.14t`, `3.15t`) are published as well. The module
+declares `mod_gil_not_used()`, so it loads without re-enabling the GIL. Solver
+calls hold no shared state and run concurrently; a single `TargetTracker`
+instance does carry state, so give each thread its own rather than sharing one.
+
 Anything outside that falls back to building from the sdist, which needs CMake
 and a C++17 compiler.
 
