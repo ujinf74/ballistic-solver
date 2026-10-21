@@ -13,6 +13,48 @@ requires-python = ">=3.10"
 readme = "README.md"
 license = "MIT"
 description = "Numerical launch-angle solver for moving targets under gravity and quadratic drag."
+authors = [{ name = "Ujin Kwon", email = "ujin@tukorea.ac.kr" }]
+keywords = [
+  "ballistics",
+  "ballistic-solver",
+  "intercept",
+  "interception",
+  "moving-target",
+  "launch-angle",
+  "trajectory",
+  "projectile",
+  "numerical-methods",
+  "ode-solver",
+  "broyden-method",
+  "physics",
+  "simulation",
+  "game-development",
+  "robotics",
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: C++",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Games/Entertainment",
+  "Topic :: Scientific/Engineering :: Mathematics",
+  "Topic :: Scientific/Engineering :: Physics",
+  "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://github.com/ujinf74/ballistic-solver"
+Repository = "https://github.com/ujinf74/ballistic-solver"
+Documentation = "https://github.com/ujinf74/ballistic-solver#readme"
+Changelog = "https://github.com/ujinf74/ballistic-solver/blob/main/CHANGELOG.md"
+Issues = "https://github.com/ujinf74/ballistic-solver/issues"
 
 [tool.scikit-build]
 cmake.source-dir = "bindings/python"
