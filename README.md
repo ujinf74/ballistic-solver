@@ -106,23 +106,16 @@ See [docs/numerical_method.md](docs/numerical_method.md) for the full method.
 
 ## Key properties
 
-* Moving targets supported
-* Constant-acceleration targets supported via the extended API
-* Strong air resistance (quadratic drag) supported
-* Low / High arc selection (since v0.2)
-* Wind vector supported (since v0.3)
-* Extended C ABI utilities (since v0.4)
-* Quartic vacuum-lead initialization for moving targets (since v0.6)
-* High-arc moving-target auxiliary multi-start fallback (since v0.6.1)
-* Coordinate-residual Gauss–Newton core with vacuum-seeded Jacobian (default since v1.0; ~15–25% faster, auxiliary-residual method kept as `solve_aux`)
-* Fast / balanced / precise solver presets
+* Moving targets, including constant acceleration
+* Quadratic drag, wind, and low / high arc selection
+* Fast / balanced / precise presets, with no per-shot tuning
 * Physical drag helper: `kDrag = 0.5 * rho * Cd * area / mass`
 * Robust in strongly nonlinear regimes (no analytic assumptions)
-* Best-effort result returned even without perfect convergence
-* Explicit success / failure reporting (+ diagnostic message)
-* Stable C ABI for multi-language use
-* Modern C++ API (`bs::solve` / `bs::solve_aux`)
-* Easy install via PyPI: `pip install ballistic-solver`
+* Best-effort result even without full convergence, with explicit
+  success / failure reporting and a diagnostic message
+* Stable C ABI, plus a modern C++ API (`bs::solve`)
+* Bindings for Python, C# / Unity, and Godot
+* `pip install ballistic-solver`
 
 ---
 
@@ -325,9 +318,15 @@ This enables usage from:
 
 Prebuilt native binaries are provided via GitHub Releases.
 
+### ABI guarantees
+
+* Plain C layout across the boundary
+* Fixed-size arrays only
+* No dynamic allocation across the boundary
+
 ---
 
-## Arc mode (since v0.2)
+## Arc mode
 
 C ABI convention:
 
@@ -340,7 +339,7 @@ https://github.com/user-attachments/assets/4334ed87-597e-4ad4-b21e-c1a1a17e8cd8
 
 ---
 
-## Wind (since v0.3)
+## Wind
 
 C ABI convention:
 
@@ -602,14 +601,6 @@ cases with seed `20260503`. The last row is the high-arc moving-target stress ca
 For a difficulty-bucketed breakdown (low / high arc × drag strength, with P99 and
 the hard-corner tail) and the full methodology, see
 [docs/benchmarks.md](docs/benchmarks.md).
-
----
-
-## ABI notes
-
-* Plain C layout across the ABI boundary
-* Fixed-size arrays only
-* No dynamic allocation across the boundary
 
 ---
 
