@@ -31,7 +31,16 @@ cross-domain examples and accuracy comparisons.
 pip install ballistic-solver
 ```
 
-Requires Python **>= 3.10**.
+Requires Python **>= 3.10**. Prebuilt wheels cover CPython 3.10-3.15:
+
+| Platform | Architectures |
+| --- | --- |
+| Linux (manylinux + musllinux) | `x86_64`, `aarch64` |
+| macOS | `universal2` (Intel + Apple Silicon) |
+| Windows | `AMD64`, `ARM64` |
+
+Anything outside that falls back to building from the sdist, which needs CMake
+and a C++17 compiler.
 
 ```python
 import ballistic_solver as bs
@@ -144,6 +153,11 @@ Returned dict keys include:
 * `message` (short diagnostic string)
 * plus convergence diagnostics (`iterations`, `acceptedSteps`, `lastLambda`, `lastAlpha`)
 
+> `acceptedSteps`, `lastLambda` and `lastAlpha` are Levenberg-Marquardt
+> counters. The coordinate-residual core never enters an LM path, so on `solve`
+> they stay at `0`, `NaN` and `NaN` -- only `iterations` is meaningful there.
+> `solve_aux` populates all four.
+
 `solve` uses the coordinate-residual core (Gauss–Newton on the 3D closest-approach
 miss, vacuum-seeded Jacobian, multistart fallback). It is the same signature as
 before and a drop-in replacement, typically ~15–25% faster at equal robustness.
@@ -177,6 +191,10 @@ same dict as `solve`.
 
 ```python
 tracker = bs.TargetTracker(processNoise=1.0, measNoise=0.25)
+
+# In practice this is your sensor feed; a synthetic one so the snippet runs:
+measurements = [(0.05 * i, (120 - 2.0 * 0.05 * i, 30 + 0.05 * i, 5.0)) for i in range(20)]
+
 for t, pos in measurements:        # (timestamp, relative position)
     tracker.update(t, pos)
 lead = tracker.predict(1.5)        # predicted relative position 1.5 s ahead
@@ -249,7 +267,11 @@ Return value policy:
 * `<0`: API-level failure, such as null pointers or an internal exception.
 * Numerical solve success is reported separately by `out->success` and `out->status`.
 * ABI v3 adds convergence diagnostics to `BallisticOutputs`: `iterations`,
-  `acceptedSteps`, `lastLambda`, and `lastAlpha`.
+  `acceptedSteps`, `lastLambda`, and `lastAlpha`. Of these only `iterations` is
+  populated here: `ballistic_solve` dispatches to the coordinate-residual core,
+  which never enters a Levenberg-Marquardt path, so `acceptedSteps` stays `0`
+  and `lastLambda` / `lastAlpha` stay `NaN`. The C ABI does not expose the
+  auxiliary-residual solver that fills them.
 * ABI v4 adds a `preset` field to `BallisticInputs` (0=Fast, 1=Balanced,
   2=Precise). `ballistic_inputs_apply_preset` records it so that the full preset
   tuning (line-search, lambda tries, finite-difference step, golden-section)
@@ -333,16 +355,19 @@ https://github.com/user-attachments/assets/1cd998cf-34db-4a74-8817-c6393227ef4e
 
 ## Using prebuilt binaries (C ABI)
 
-Download the archive for your platform from **Releases**.
+Download the archive for your platform from **Releases**. Each archive holds the
+shared library plus the C ABI header `ballistic_solver_c_api.h`.
 
-Each release contains:
+| Archive | Library | Architecture |
+| --- | --- | --- |
+| `..._linux.zip` | `libballistic_solver.so` | `x86_64` |
+| `..._macos.zip` | `libballistic_solver.dylib` | `arm64` (Apple Silicon) |
+| `..._windows.zip` | `ballistic_solver.dll` | `AMD64` |
 
-* Shared library
-
-  * Windows: `ballistic_solver.dll`
-  * Linux: `libballistic_solver.so`
-  * macOS: `libballistic_solver.dylib`
-* C ABI header: `ballistic_solver_c_api.h`
+The filenames do not carry the architecture, so note that these are
+single-architecture builds. Unlike the Python wheels above there is no
+universal2 macOS archive and no ARM Linux or Windows archive; for those
+targets build from source or use the Python package.
 
 ---
 
@@ -355,7 +380,7 @@ include(FetchContent)
 FetchContent_Declare(
     ballistic_solver
     GIT_REPOSITORY https://github.com/ujinf74/ballistic-solver.git
-    GIT_TAG v1.0.0
+    GIT_TAG v1.1.0
 )
 set(BUILD_TESTING OFF)  # don't build the library's own tests in your tree
 FetchContent_MakeAvailable(ballistic_solver)
@@ -546,7 +571,8 @@ python tests/random_regression.py
 python benchmarks/linear_cases.py
 ```
 
-The CI workflow runs CTest smoke coverage plus the Python regression script.
+The CI workflow runs the CTest suite -- a C ABI smoke test and a C++ `bs::`
+smoke test -- plus the Python regression script, on Linux, macOS and Windows.
 The regression script includes analytic vacuum checks, constructed moving-target
 vacuum cases, unreachable-target checks, randomized linear cases, and
 constant-acceleration API smoke coverage.
