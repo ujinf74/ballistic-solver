@@ -10,7 +10,7 @@ build-backend = "scikit_build_core.build"
 name = "ballistic-solver"
 dynamic = ["version"]
 requires-python = ">=3.10"
-readme = "README.md"
+readme = "README.pypi.md"
 license = "MIT"
 description = "Numerical launch-angle solver for moving targets under gravity and quadratic drag."
 authors = [{ name = "Ujin Kwon", email = "ujin@tukorea.ac.kr" }]

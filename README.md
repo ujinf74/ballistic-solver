@@ -100,7 +100,7 @@ the same residual but need a good initial guess and per-problem tuning, and are
 more prone to local minima. `ballistic-solver` is purpose-built for the
 moving-target + drag + real-time corner: a closed-form vacuum warm start, an
 analytic Jacobian preconditioner, and a multistart fallback for the hard cases.
-See [docs/numerical_method.md](docs/numerical_method.md) for the full method.
+See [docs/numerical_method.md](https://github.com/ujinf74/ballistic-solver/blob/main/docs/numerical_method.md) for the full method.
 
 ---
 
@@ -489,8 +489,8 @@ seam is also provided — it powers the real-time demo at the top of this README
 as `solve_aux` for compatibility and reproducibility.
 
 Failure cases are explicitly detected and reported. See
-[docs/numerical_method.md](docs/numerical_method.md) for a step-by-step
-description and [docs/limitations.md](docs/limitations.md) for the modelling
+[docs/numerical_method.md](https://github.com/ujinf74/ballistic-solver/blob/main/docs/numerical_method.md) for a step-by-step
+description and [docs/limitations.md](https://github.com/ujinf74/ballistic-solver/blob/main/docs/limitations.md) for the modelling
 assumptions.
 
 ---
@@ -523,7 +523,7 @@ accept a solution.
 * best-effort (not guaranteed) on unreachable or near-limit targets
 * a numerical library for games, simulation, robotics, and research — **not** a certified fire-control system
 
-See [docs/limitations.md](docs/limitations.md) for the full list and the reasoning behind each.
+See [docs/limitations.md](https://github.com/ujinf74/ballistic-solver/blob/main/docs/limitations.md) for the full list and the reasoning behind each.
 
 ---
 
@@ -600,7 +600,7 @@ cases with seed `20260503`. The last row is the high-arc moving-target stress ca
 
 For a difficulty-bucketed breakdown (low / high arc × drag strength, with P99 and
 the hard-corner tail) and the full methodology, see
-[docs/benchmarks.md](docs/benchmarks.md).
+[docs/benchmarks.md](https://github.com/ujinf74/ballistic-solver/blob/main/docs/benchmarks.md).
 
 ---
 
