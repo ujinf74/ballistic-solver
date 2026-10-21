@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. Versions follow
 `vMAJOR.MINOR.PATCH` git tags; the build derives its version from the tag.
 
-## Unreleased
+## 1.1.0
 
 ### Added
 
@@ -11,6 +11,47 @@ All notable changes to this project are documented here. Versions follow
   taking `bs::Problem` and `bs::Options` and returning `bs::Intercept`, namespaced
   and compiled into the shared library so no internal symbols leak into consumers.
   The C ABI (`ballistic_solve`) remains the stable / FFI boundary.
+- Test coverage for that C++ surface (`tests/smoke_test_cpp.cpp`, registered with
+  CTest): `solve` / `solve_aux`, the preset and arc options, the `rel_acc` path
+  and the rejected-input path. `examples/cpp/basic.cpp` is now a CMake target as
+  well, so neither can rot unnoticed.
+
+### Changed
+
+- Decomposed the two oversized solver functions: `solve_launch_angles`
+  (328 -> 220 lines) and `solve_auxiliary_multistart` (232 -> 44), hoisting the
+  finite-difference Jacobian that had been duplicated between them into a single
+  `jacobian_angles_fd`, and splitting the multistart into
+  `collect_multistart_seeds` and `run_multistart_seed`. Pure extraction: no
+  operation was reordered and no public signature changed. Verified bit-for-bit
+  identical output over a deterministic 9000-solve sweep against the
+  pre-refactor baseline.
+- `examples/cpp/basic.cpp` now uses the public `bs::` API instead of reaching
+  into the internal core headers, matching what the README documents.
+
+### Fixed
+
+- The C smoke test was compiled away under Release (`NDEBUG`), silently
+  disabling every assertion. Worse, five API calls sat inside the assert
+  expressions, so `ballistic_k_drag_from_physical`,
+  `ballistic_inputs_apply_preset`, the precise-preset solve and
+  `ballistic_solve_accel` were never invoked in CI at all. Checks are now
+  explicit and survive `NDEBUG`.
+- That also surfaced a stale assertion on `BallisticOutputs.lastLambda`.
+  `lastLambda` / `lastAlpha` are Levenberg-Marquardt diagnostics, and the
+  default core (coordinate-residual) uses neither damping nor a line search, so
+  it leaves both at NaN by design. Consumers should not read them on the default
+  path.
+
+### Documentation / tooling
+
+- PyPI package metadata: author, keywords, trove classifiers and project URLs.
+  The published package previously had none of these, so it was unreachable
+  through PyPI search and its page did not link back to the repository.
+- `SECURITY.md` now names 1.0.x as the supported release line (it still listed
+  0.7.x).
+- Added `.mailmap` so `git log` / `git shortlog` report a single author identity
+  across the history.
 
 ## 1.0.0
 
