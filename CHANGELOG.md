@@ -3,6 +3,20 @@
 All notable changes to this project are documented here. Versions follow
 `vMAJOR.MINOR.PATCH` git tags; the build derives its version from the tag.
 
+## 1.3.0
+
+### Added
+
+- Wheels for CPython 3.9, bringing the published range to 3.9-3.15 across every
+  existing target: manylinux and musllinux on `x86_64` and `aarch64`,
+  `win_amd64`, `win_arm64`, and macOS `universal2`. pybind11 3.1.0 still
+  supports 3.9 and the shipped python sources parse under 3.9 grammar, so only
+  our own floor was in the way. `requires-python` is now `>=3.9`.
+
+  Note that 3.9 reached end of life in October 2025 and 3.10 in October 2026;
+  neither receives security fixes. Both are published only because pybind11 and
+  cibuildwheel still support them, and will be dropped when that changes.
+
 ## 1.2.1
 
 ### Documentation / tooling
